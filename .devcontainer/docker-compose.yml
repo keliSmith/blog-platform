@@ -18,6 +18,12 @@ services:
       # 这里注入的环境变量优先级高于 backend/.env 中的空 DATABASE_URL，
       # 因此无需手动改 .env 即可用上 MySQL；原生本机开发（不在容器内）不受影响，仍走 SQLite。
       DATABASE_URL: "mysql+pymysql://blog_user:blog_password@db:3306/blog?charset=utf8mb4"
+    # 直接把应用端口发布到宿主，保证无论用 VS Code Dev Containers 的 forwardPorts
+    # 还是直接用 docker compose 启动，宿主浏览器都能访问 localhost:3000 / :8000。
+    # 与 devcontainer.json 的 forwardPorts 并存，不冲突。
+    ports:
+      - "3000:3000"
+      - "8000:8000"
     # 等 MySQL 健康后再启动应用，避免连库失败
     depends_on:
       db:
