@@ -1,0 +1,747 @@
+/* 富文本 / Markdown 渲染样式（详情页与编辑器共用） */
+.article-prose {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #1f1f1f;
+  word-break: break-word;
+}
+
+.article-prose h1 {
+  font-size: 1.8em;
+  font-weight: 700;
+  margin: 1.2em 0 0.6em;
+  line-height: 1.3;
+}
+
+.article-prose h2 {
+  font-size: 1.5em;
+  font-weight: 700;
+  margin: 1.1em 0 0.5em;
+  line-height: 1.3;
+}
+
+.article-prose h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+}
+
+.article-prose p {
+  margin: 0 0 1em;
+}
+
+.article-prose a {
+  color: #1677ff;
+  text-decoration: underline;
+}
+
+.article-prose img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.5em 0;
+}
+
+.article-prose ul,
+.article-prose ol {
+  padding-left: 1.6em;
+  margin: 0 0 1em;
+}
+
+.article-prose li {
+  margin: 0.25em 0;
+}
+
+.article-prose blockquote {
+  border-left: 4px solid #d9d9d9;
+  margin: 0 0 1em;
+  padding: 0.2em 0 0.2em 16px;
+  color: #595959;
+  background: #fafafa;
+}
+
+.article-prose pre {
+  background: #f5f5f5;
+  padding: 14px 16px;
+  border-radius: 8px;
+  overflow: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.article-prose code {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.article-prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.article-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 1em;
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.article-prose th,
+.article-prose td {
+  border: 1px solid #e8e8e8;
+  padding: 8px 12px;
+  vertical-align: top;
+  min-width: 60px;
+  position: relative;
+  word-break: break-word;
+}
+
+.article-prose th {
+  background: #fafafa;
+  font-weight: 600;
+  text-align: left;
+}
+
+/* Tiptap 在单元格内会包一层 <p>，去掉多余外边距避免行高变大 */
+.article-prose td > p,
+.article-prose th > p {
+  margin: 0;
+}
+
+/* 文字高亮（Highlight 扩展，multicolor 时行内 style 覆盖此默认色） */
+.article-prose mark {
+  background-color: #fff3a3;
+  color: inherit;
+  padding: 0.1em 0.2em;
+  border-radius: 3px;
+}
+
+.article-prose hr {
+  border: none;
+  border-top: 1px solid #e8e8e8;
+  margin: 1.5em 0;
+}
+
+/* 编辑器内编辑区样式（仅富文本编辑模式生效） */
+.article-prose .ProseMirror {
+  min-height: 300px;
+  outline: none;
+}
+
+.article-prose .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #bbb;
+  pointer-events: none;
+  height: 0;
+}
+
+/* ============ 编辑器增强（语雀风格） ============ */
+
+/* 顶部工具栏 */
+.editor-toolbar {
+  border: 1px solid #d9d9d9;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 6px 8px;
+  background: #fafafa;
+  position: relative;
+  z-index: 2;
+}
+
+.editor-btn {
+  width: 32px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #595959;
+  padding: 0 !important;
+}
+
+.editor-btn.is-active {
+  color: #1677ff;
+  background: #e6f4ff;
+}
+
+.editor-btn:hover {
+  color: #1677ff;
+}
+
+/* 编辑区容器 */
+.editor-surface {
+  position: relative;
+}
+
+/* 浮动气泡工具栏 */
+.bubble-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.bubble-toolbar .editor-btn {
+  color: #595959;
+}
+
+/* 斜杠命令菜单 */
+.slash-menu {
+  width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+}
+
+.slash-menu__empty {
+  padding: 12px;
+  color: #999;
+  text-align: center;
+  font-size: 13px;
+}
+
+.slash-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.slash-menu__item.is-selected,
+.slash-menu__item:hover {
+  background: #f0f5ff;
+}
+
+.slash-menu__icon {
+  flex: 0 0 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border-radius: 8px;
+  color: #555;
+  font-size: 16px;
+}
+
+.slash-menu__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.slash-menu__title {
+  font-size: 14px;
+  color: #1f1f1f;
+}
+
+.slash-menu__desc {
+  font-size: 12px;
+  color: #999;
+}
+
+/* 编辑器内图片 */
+.article-prose img.editor-image {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.6em 0;
+  display: block;
+}
+
+/* 任务列表 */
+.article-prose ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.2em;
+}
+
+.article-prose ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.article-prose ul[data-type='taskList'] li > label {
+  margin-top: 0.35em;
+}
+
+.article-prose ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+
+.article-prose ul[data-type='taskList'] input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1677ff;
+  cursor: pointer;
+}
+
+/* 选中文字高亮 */
+.article-prose .ProseMirror ::selection {
+  background: #b4d5ff;
+}
+
+/* 正文链接 */
+.article-prose a.article-link {
+  color: #1677ff;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 编辑器底部提示 */
+.editor-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #999;
+}
+
+.editor-hint kbd {
+  background: #f0f0f0;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+/* ============ 高亮块（Callout，语雀风格） ============ */
+
+.article-prose .callout {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0 0 1em;
+  border: 1px solid transparent;
+  background: #f5f7fa;
+}
+
+.article-prose .callout__icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.article-prose .callout__emoji {
+  font-size: 18px;
+}
+
+.article-prose .callout__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.article-prose .callout__content > *:first-child {
+  margin-top: 0;
+}
+
+.article-prose .callout__content > *:last-child {
+  margin-bottom: 0;
+}
+
+.article-prose .callout--info {
+  background: #eef5ff;
+  border-color: #d6e4ff;
+}
+
+.article-prose .callout--success {
+  background: #f0fbf3;
+  border-color: #c9f0d4;
+}
+
+.article-prose .callout--warning {
+  background: #fff8e6;
+  border-color: #ffe7ba;
+}
+
+.article-prose .callout--danger {
+  background: #fff1f0;
+  border-color: #ffccc7;
+}
+
+/* ============ 数学公式（KaTeX） ============ */
+
+.article-prose .math-node {
+  display: inline-block;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.article-prose .math-node:hover {
+  background: #e6f4ff;
+}
+
+.article-prose .math-block {
+  display: block;
+  text-align: center;
+  margin: 0 0 1em;
+  padding: 8px;
+}
+
+.article-prose .math-input {
+  font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+  font-size: 14px;
+  border: 1px solid #1677ff;
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+  min-width: 120px;
+}
+
+.article-prose .math-input--block {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+}
+
+.article-prose .math-empty {
+  color: #bbb;
+}
+
+.article-prose .math-error {
+  color: #cf1322;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+/* ============ 编辑器底部状态栏（字数 / 阅读时长 / 自动保存） ============ */
+
+.editor-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #999;
+}
+
+.editor-statusbar__save {
+  margin-left: auto;
+  color: #1677ff;
+}
+
+/* ============ 大纲目录（语雀风格右侧栏） ============ */
+
+.outline-panel {
+  flex: 0 0 220px;
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  border-left: 2px solid #f0f0f0;
+  padding: 4px 0 4px 14px;
+}
+
+.outline-panel__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #999;
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #595959;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-item:hover {
+  background: #f0f5ff;
+  color: #1677ff;
+}
+
+.outline-item--l1 {
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.outline-item--l2 {
+  padding-left: 16px;
+}
+
+.outline-item--l3 {
+  padding-left: 30px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .outline-panel {
+    display: none;
+  }
+}
+
+/* ============ 代码块语法高亮（highlight.js github 主题微调） ============ */
+
+.article-prose pre code.hljs {
+  background: transparent;
+  padding: 0;
+}
+
+.article-prose .hljs-comment,
+.article-prose .hljs-quote {
+  color: #6a737d;
+}
+
+.article-prose .hljs-keyword,
+.article-prose .hljs-selector-tag,
+.article-prose .hljs-literal {
+  color: #d73a49;
+}
+
+.article-prose .hljs-string,
+.article-prose .hljs-attr,
+.article-prose .hljs-template-tag {
+  color: #032f62;
+}
+
+.article-prose .hljs-number,
+.article-prose .hljs-built_in {
+  color: #005cc5;
+}
+
+/* ============ Dark Mode（跟随 html.dark） ============
+   详情页正文 / 编辑器增强在暗色下统一适配，避免黑字叠深色背景不可读 */
+.dark .article-prose {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.dark .article-prose a,
+.dark .article-prose a.article-link {
+  color: #4096ff;
+}
+
+.dark .article-prose blockquote {
+  border-left-color: #303030;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dark .article-prose pre {
+  background: #1e1e1e;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dark .article-prose code {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dark .article-prose th,
+.dark .article-prose td {
+  border-color: #303030;
+}
+
+.dark .article-prose th {
+  background: #1f1f1f;
+}
+
+.dark .article-prose hr {
+  border-top-color: #303030;
+}
+
+/* 黄底高亮在深色下反相为深字，保证可读 */
+.dark .article-prose mark {
+  background-color: #fff3a3;
+  color: #1f1f1f;
+}
+
+/* ---- 编辑器增强 dark ---- */
+.dark .editor-toolbar {
+  border-color: #303030;
+  background: #1f1f1f;
+}
+
+.dark .editor-btn {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.dark .editor-btn.is-active {
+  color: #4096ff;
+  background: rgba(64, 150, 255, 0.16);
+}
+
+.dark .editor-btn:hover {
+  color: #4096ff;
+}
+
+.dark .bubble-toolbar {
+  background: #1f1f1f;
+  border-color: #303030;
+}
+
+.dark .bubble-toolbar .editor-btn {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.dark .slash-menu {
+  background: #1f1f1f;
+  border-color: #303030;
+}
+
+.dark .slash-menu__empty {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dark .slash-menu__item.is-selected,
+.dark .slash-menu__item:hover {
+  background: rgba(64, 150, 255, 0.14);
+}
+
+.dark .slash-menu__icon {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.dark .slash-menu__title {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.dark .slash-menu__desc {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ---- Callout dark ---- */
+.dark .article-prose .callout {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: #303030;
+}
+
+.dark .article-prose .callout--info {
+  background: rgba(64, 150, 255, 0.10);
+  border-color: rgba(64, 150, 255, 0.30);
+}
+
+.dark .article-prose .callout--success {
+  background: rgba(82, 196, 26, 0.10);
+  border-color: rgba(82, 196, 26, 0.30);
+}
+
+.dark .article-prose .callout--warning {
+  background: rgba(250, 173, 20, 0.10);
+  border-color: rgba(250, 173, 20, 0.30);
+}
+
+.dark .article-prose .callout--danger {
+  background: rgba(255, 77, 79, 0.10);
+  border-color: rgba(255, 77, 79, 0.30);
+}
+
+/* ---- 数学公式 dark ---- */
+.dark .article-prose .math-node:hover {
+  background: rgba(64, 150, 255, 0.18);
+}
+
+.dark .article-prose .math-input {
+  border-color: #4096ff;
+  background: #1f1f1f;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dark .article-prose .math-empty {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.dark .article-prose .math-error {
+  color: #ff7875;
+}
+
+/* ---- 状态栏 / 提示 dark ---- */
+.dark .editor-statusbar {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dark .editor-statusbar__save {
+  color: #4096ff;
+}
+
+.dark .editor-hint {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dark .editor-hint kbd {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #303030;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---- 大纲面板 dark ---- */
+.dark .outline-panel {
+  border-left-color: #303030;
+}
+
+.dark .outline-panel__title {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dark .outline-item {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.dark .outline-item:hover {
+  background: rgba(64, 150, 255, 0.14);
+  color: #4096ff;
+}
+
+.dark .outline-item--l1 {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* ---- 代码高亮 github-dark 配色 ---- */
+.dark .article-prose .hljs-comment,
+.dark .article-prose .hljs-quote {
+  color: #8b949e;
+}
+
+.dark .article-prose .hljs-keyword,
+.dark .article-prose .hljs-selector-tag,
+.dark .article-prose .hljs-literal {
+  color: #ff7b72;
+}
+
+.dark .article-prose .hljs-string,
+.dark .article-prose .hljs-attr,
+.dark .article-prose .hljs-template-tag {
+  color: #a5d6ff;
+}
+
+.dark .article-prose .hljs-number,
+.dark .article-prose .hljs-built_in {
+  color: #79c0ff;
+}

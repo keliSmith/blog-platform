@@ -1,0 +1,12 @@
+=== start.ps1 ===
+SYNTAX OK
+=== bootstrap.ps1 ===
+SYNTAX OK
+=== check_env.ps1 ===
+SYNTAX OK
+=== health_check.ps1 ===
+SYNTAX OK
+=== migrate.ps1 ===
+SYNTAX OK
+=== reset_db.ps1 ===
+SYNTAX OK

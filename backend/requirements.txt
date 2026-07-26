@@ -1,0 +1,14 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+sqlalchemy[asyncio]>=2.0.35
+aiosqlite>=0.20
+asyncmy>=0.2.9
+bcrypt>=4.1
+python-jose[cryptography]>=3.3.0
+pydantic>=2.0
+pydantic-settings>=2.0
+pydantic[email]>=2.0
+python-multipart>=0.0.12
+python-dotenv>=1.0
+Pillow>=10.0
+alembic>=1.13

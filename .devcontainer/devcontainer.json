@@ -1,0 +1,32 @@
+{
+  "name": "Blog Platform",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/blog-platform-main",
+  "forwardPorts": [3000, 8000],
+  "mounts": [
+    "source=blog-backend-venv,target=${containerWorkspaceFolder}/backend/.venv,type=volume",
+    "source=blog-frontend-node_modules,target=${containerWorkspaceFolder}/frontend/node_modules,type=volume"
+  ],
+  "postCreateCommand": "sudo bash .devcontainer/post-create.sh",
+  "remoteEnv": {
+    "APP_ENV": "development",
+    "APP_RELOAD": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/backend/.venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "dev.containers.mountWaylandSocket": false
+      }
+    }
+  }
+}

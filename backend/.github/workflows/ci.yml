@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install black ruff mypy
+      - name: Check formatting (Black)
+        working-directory: backend
+        run: black --check --line-length=100 app/ tests/
+      - name: Lint (Ruff)
+        working-directory: backend
+        run: ruff check app/ tests/
+      - name: Type check (MyPy)
+        working-directory: backend
+        run: mypy --ignore-missing-imports app/ || true
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 123456
+          MYSQL_DATABASE: blog
+          MYSQL_USER: blog_user
+          MYSQL_PASSWORD: blog_password
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Wait for MySQL
+        run: |
+          for i in $(seq 1 30); do
+            mysqladmin ping -h127.0.0.1 -u root -p123456 && break
+            sleep 2
+          done
+      - name: Initialize test DB
+        working-directory: backend
+        run: mysql -h 127.0.0.1 -u root -p123456 < migrations/init.sql
+      - name: Run tests with coverage
+        working-directory: backend
+        run: python -m pytest --cov=app --cov-report=xml --cov-report=term-missing -v
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.xml
+          fail_ci_if_error: false
+
+  docker:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t blog-backend:latest ./backend

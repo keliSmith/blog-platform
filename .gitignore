@@ -1,0 +1,46 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+
+# ===== Virtual environments =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== Type checker / linter / test caches =====
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.cache/
+
+# ===== Local databases (runtime data) =====
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== Environment / secrets =====
+.env
+.env.local
+.env.*.local
+.env.prod
+
+# ===== Uploaded media (runtime, user-generated) =====
+backend/uploads/
+
+# ===== Editor / OS =====
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.swp
+
+# ===== Logs =====
+*.log
+.workbuddy/
