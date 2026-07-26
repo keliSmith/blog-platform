@@ -4,6 +4,7 @@ from app.models.comment import Comment
 from app.models.interaction import ArticleFavorite, ArticleLike, ArticleView
 from app.models.tag import Tag
 from app.models.user import User
+from app.models.verification_code import VerificationCode
 
 __all__ = [
     "Article",
@@ -14,5 +15,6 @@ __all__ = [
     "Comment",
     "Tag",
     "User",
+    "VerificationCode",
     "article_tags",
 ]

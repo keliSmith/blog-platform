@@ -11,8 +11,8 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import joinedload
 
-from app.database import AsyncSession, get_session
 from app.config import settings
+from app.database import AsyncSession, get_session
 from app.dependencies import CurrentUser, OptionalUser, pagination_params
 
 # Dev/test use SQLite; production uses MySQL. The two dialects need different

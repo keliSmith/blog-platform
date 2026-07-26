@@ -1,9 +1,12 @@
 export interface User {
   id: number;
   username: string;
-  email: string;
+  email?: string | null;
+  phone?: string | null;
   avatar?: string;
   role?: string;
+  email_verified?: boolean;
+  phone_verified?: boolean;
   created_at?: string;
 }
 

@@ -3,6 +3,8 @@ import type { User, ApiResponse } from '../types';
 import request from '../utils/request';
 import { getT } from '../i18n';
 import { useThemeStore } from './themeStore';
+import * as authApi from '../api/auth';
+import type { RegisterData } from '../api/auth';
 
 interface AuthState {
   user: User | null;
@@ -11,7 +13,8 @@ interface AuthState {
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => void;
   login: (username: string, password: string) => Promise<string>;
-  register: (data: { username: string; email: string; password: string }) => Promise<string>;
+  register: (data: RegisterData) => Promise<string>;
+  resetPassword: (data: authApi.ResetPasswordData) => Promise<string>;
   fetchProfile: () => Promise<void>;
   logout: () => void;
 }
@@ -29,25 +32,31 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   login: async (username, password) => {
-    const res = await request.post<ApiResponse<{ token?: string }>>('/api/login', { username, password });
+    const res = await authApi.login({ username, password });
     if (res?.success && res?.data?.token) {
       localStorage.setItem('token', res.data.token);
-      set({ token: res.data.token });
+      set({ token: res.data.token, user: res.data.user });
       return getT(useThemeStore.getState().lang)('loginSuccess');
     }
     throw new Error(res?.message || getT(useThemeStore.getState().lang)('loginFail'));
   },
 
   register: async (data) => {
-    const res = await request.post<ApiResponse<{ token?: string }>>('/api/register', data);
-    if (res?.success) {
-      if (res?.data?.token) {
-        localStorage.setItem('token', res.data.token);
-        set({ token: res.data.token });
-      }
+    const res = await authApi.register(data);
+    if (res?.success && res?.data?.token) {
+      localStorage.setItem('token', res.data.token);
+      set({ token: res.data.token, user: res.data.user });
       return getT(useThemeStore.getState().lang)('registerSuccess');
     }
     throw new Error(res?.message || getT(useThemeStore.getState().lang)('registerFail'));
+  },
+
+  resetPassword: async (data) => {
+    const res = await authApi.resetPassword(data);
+    if (res?.success) {
+      return getT(useThemeStore.getState().lang)('resetSuccess');
+    }
+    throw new Error(res?.message || getT(useThemeStore.getState().lang)('resetFail'));
   },
 
   fetchProfile: async () => {

@@ -1,6 +1,7 @@
 """Pytest fixtures for FastAPI async testing."""
 
 import os
+import sys
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -8,8 +9,12 @@ from httpx import ASGITransport, AsyncClient
 # Force testing environment BEFORE any app imports
 os.environ["APP_ENV"] = "testing"
 
+sys.path.insert(0, os.path.dirname(__file__))
+
 from app.database import Base, engine
 from app.main import app
+
+from helpers import register_via_email
 
 
 @pytest.fixture(scope="session")
@@ -38,14 +43,8 @@ async def client(setup_database):  # noqa: ARG001
 
 @pytest.fixture
 async def auth_headers(client):
-    """Register + login, return Authorization headers."""
-    # Register
-    await client.post("/api/register", json={
-        "username": "testuser",
-        "email": "test@example.com",
-        "password": "Test123456",
-    })
-    # Login
+    """Register (email-verified) + login, return Authorization headers."""
+    await register_via_email(client, "testuser", "test@example.com", "Test123456")
     resp = await client.post("/api/login", json={
         "username": "testuser",
         "password": "Test123456",

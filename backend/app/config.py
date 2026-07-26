@@ -39,6 +39,40 @@ class Settings(BaseSettings):
     ALLOWED_IMAGE_EXTENSIONS: set[str] = {"jpg", "jpeg", "png", "gif", "webp"}
     UPLOAD_BASE_URL: str = ""
 
+    # --- Verification codes (email / SMS) ---
+    # Time-to-live of a verification code, in minutes.
+    VERIFICATION_CODE_TTL_MINUTES: int = 10
+    # Minimum seconds between two code sends to the same target/channel/purpose.
+    VERIFICATION_CODE_RESEND_SECONDS: int = 60
+    # Max wrong-attempts before a code is invalidated (defense against brute force).
+    VERIFICATION_CODE_MAX_ATTEMPTS: int = 5
+    # When True the send-code response echoes the code in `data.dev_code`.
+    # ONLY for local development (no real SMS/email provider wired up) so the
+    # UI flow can be tested without reading server logs. Production defaults
+    # to False. Use the `console` notification backends to still see codes.
+    EXPOSE_DEV_CODE: bool = False
+
+    # --- Email notification backend ---
+    # "console"  -> log the code to the server console (default, no deps).
+    # "smtp"     -> send a real email via SMTP (uses stdlib smtplib).
+    EMAIL_BACKEND: str = "console"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 465
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@blog.local"
+    SMTP_USE_TLS: bool = True  # True -> SMTP_SSL (465); False -> STARTTLS (587)
+
+    # --- SMS notification backend ---
+    # "console" -> log the code to the server console (default, no deps).
+    # A real provider (Aliyun/Twilio/...) can be wired in notifications.py.
+    SMS_BACKEND: str = "console"
+    SMS_PROVIDER: str = ""  # e.g. "aliyun", "tencent", "twilio"
+    SMS_ACCESS_KEY: str = ""
+    SMS_SECRET: str = ""
+    SMS_SIGN_NAME: str = ""
+    SMS_TEMPLATE_CODE: str = ""
+
     model_config = {
         "env_file": str(_BASE_DIR / ".env"),
         "case_sensitive": True,
@@ -67,6 +101,9 @@ class DevelopmentSettings(Settings):
 
     DEBUG: bool = True
     LOG_LEVEL: str = "DEBUG"
+    # Convenience for local UI testing without a real mail/SMS gateway:
+    # the send-code endpoint will echo the code in its response.
+    EXPOSE_DEV_CODE: bool = True
 
     def _default_database_uri(self) -> str:
         return "sqlite+aiosqlite:///./dev.db"

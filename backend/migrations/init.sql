@@ -14,14 +14,36 @@ USE blog;
 CREATE TABLE IF NOT EXISTS users (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     username    VARCHAR(50)  NOT NULL UNIQUE,
-    email       VARCHAR(120) NOT NULL UNIQUE,
+    -- Email is nullable so a user may register with a verified phone only.
+    email       VARCHAR(120) DEFAULT NULL UNIQUE,
+    phone       VARCHAR(20)  DEFAULT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     avatar      VARCHAR(255) DEFAULT NULL,
     role        VARCHAR(20)  NOT NULL DEFAULT 'user',
+    email_verified TINYINT(1) NOT NULL DEFAULT 0,
+    phone_verified TINYINT(1) NOT NULL DEFAULT 0,
     created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_users_email (email),
+    INDEX idx_users_phone (phone),
     INDEX idx_users_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===============================================
+-- Verification Codes (email / SMS)
+-- ===============================================
+CREATE TABLE IF NOT EXISTS verification_codes (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    target      VARCHAR(120) NOT NULL,
+    channel     VARCHAR(10)  NOT NULL,
+    purpose     VARCHAR(20)  NOT NULL,
+    code        VARCHAR(10)  NOT NULL,
+    attempts    INT          NOT NULL DEFAULT 0,
+    consumed    TINYINT(1)   NOT NULL DEFAULT 0,
+    expires_at  DATETIME     NOT NULL,
+    created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_vc_target (target),
+    INDEX idx_vc_lookup (target, channel, purpose)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===============================================
