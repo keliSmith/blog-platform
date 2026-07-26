@@ -21,14 +21,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-       # 清理工作区旧内容
-      - name: Clean up workspace for fresh clone
+       # ---------- 彻底清理工作区（删除所有内容，包括 .git） ----------
+      - name: Clean workspace for fresh clone
         run: |
-          # 删除目录内的所有可见文件和文件夹
+          # 1. 确保工作目录存在（如果之前被删除，先创建）
+          mkdir -p ${{ github.workspace }}
+          
+          # 2. 删除所有可见文件/文件夹
           rm -rf ${{ github.workspace }}/*
-          # 删除目录内的所有隐藏文件（如 .git, .env 等），忽略“找不到”的错误
-          rm -rf ${{ github.workspace }}/.[!.]* || true
+          
+          # 3. 删除所有隐藏文件/文件夹（特别是 .git）
+          rm -rf ${{ github.workspace }}/.git
+          # 可选：删除其他隐藏配置文件（如 .env, .cache 等）
+          rm -rf ${{ github.workspace }}/.??*
         shell: bash
+      # ---------- 清理结束 ----------
 
       - name: Checkout
         uses: actions/checkout@v4
