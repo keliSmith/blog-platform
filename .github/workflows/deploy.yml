@@ -21,11 +21,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-       # 清理工作区旧文件
-      - name: Clean up workspace for self-hosted runner
+       # 清理工作区旧内容
+      - name: Clean up workspace for fresh clone
         run: |
-          # 强制删除旧的项目目录，防止强制推送导致的历史冲突
-          rm -rf ${{ runner.workspace }}/${{ github.event.repository.name }}
+          # 删除目录内的所有可见文件和文件夹
+          rm -rf ${{ github.workspace }}/*
+          # 删除目录内的所有隐藏文件（如 .git, .env 等），忽略“找不到”的错误
+          rm -rf ${{ github.workspace }}/.[!.]* || true
         shell: bash
 
       - name: Checkout
