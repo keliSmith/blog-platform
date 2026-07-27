@@ -80,16 +80,27 @@ jobs:
             if [ -d .git ]; then
               git fetch origin main
               git reset --hard origin/main
-              git clean -fd
+              # 排除 frontend/dist (SCP 刚上传的产物) 和 .env.prod (运行必需配置)
+              git clean -fd -e frontend/dist -e .env.prod
             else
               git clone https://github.com/keliSmith/blog-platform.git .
             fi
             cd deploy
             if [ "$DEPLOY_FRONTEND" = "true" ]; then
-              docker compose -f docker-compose.prod.yml build frontend
-              docker compose -f docker-compose.prod.yml up -d frontend
+              docker compose -f docker-compose.prod.yml up -d --build frontend
             fi
             if [ "$DEPLOY_BACKEND" = "true" ]; then
-              docker compose -f docker-compose.prod.yml build backend
-              docker compose -f docker-compose.prod.yml up -d backend
+              docker compose -f docker-compose.prod.yml up -d --build backend
+            fi
+            # Verify: wait for new containers then health-check
+            sleep 5
+            if [ "$DEPLOY_FRONTEND" = "true" ]; then
+              echo "==> Frontend container status:"
+              docker compose -f docker-compose.prod.yml ps frontend
+            fi
+            if [ "$DEPLOY_BACKEND" = "true" ]; then
+              echo "==> Backend health check:"
+              docker compose -f docker-compose.prod.yml exec -T backend \
+                python -c "import urllib.request; r=urllib.request.urlopen('http://localhost:8000/api/health'); print(r.read().decode())" \
+                || echo "WARNING: Backend health check failed. Check logs: docker compose -f docker-compose.prod.yml logs backend"
             fi
