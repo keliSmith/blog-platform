@@ -86,11 +86,20 @@ jobs:
               git clone https://github.com/keliSmith/blog-platform.git .
             fi
             cd deploy
+            # 载入 .env.prod, 让 docker compose 正确插值 ${MYSQL_PASSWORD} 等变量,
+            # 否则 DATABASE_URL 中的密码会为空, 导致迁移/后端连不上数据库。
+            if [ -f .env.prod ]; then
+              set -a
+              source .env.prod
+              set +a
+            fi
             if [ "$DEPLOY_FRONTEND" = "true" ]; then
               docker compose -f docker-compose.prod.yml up -d --build frontend
             fi
             if [ "$DEPLOY_BACKEND" = "true" ]; then
-              docker compose -f docker-compose.prod.yml up -d --build backend
+              docker compose -f docker-compose.prod.yml build backend
+              docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
+              docker compose -f docker-compose.prod.yml up -d backend
             fi
             # Verify: wait for new containers then health-check
             sleep 5

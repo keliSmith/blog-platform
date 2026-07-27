@@ -25,11 +25,20 @@ async def lifespan(_app: FastAPI):
         level=getattr(logging, settings.LOG_LEVEL),
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
-    # Auto-create tables when using SQLite (dev / testing)
-    from app.database import Base, engine
+    # Auto-create tables only for SQLite (local dev / testing) as a convenience.
+    # In production (MySQL) schema is managed by Alembic migrations
+    # (run `alembic upgrade head` on deploy) so that existing tables/columns
+    # are evolved safely instead of being blindly recreated.
+    from app.database import Base, engine, _is_sqlite
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if _is_sqlite:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    else:
+        logging.getLogger("app").info(
+            "MySQL mode: skipping create_all — ensure `alembic upgrade head` "
+            "has been run (deploy.sh / CI does this automatically)."
+        )
     yield
     await engine.dispose()
 

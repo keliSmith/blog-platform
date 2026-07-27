@@ -91,8 +91,16 @@ for _ in $(seq 1 30); do
 done
 
 # ---- 7. 后端 ----
-echo "==> 构建并启动后端"
-docker compose -f "$COMPOSE_FILE" up -d --build backend
+echo "==> 构建后端"
+docker compose -f "$COMPOSE_FILE" build backend
+
+echo "==> 运行数据库迁移 (Alembic)"
+# 容器内的 app.config 会读取 APP_ENV / DATABASE_URL 等环境变量 (由 compose 注入),
+# 这里已 source .env.prod, 故 ${MYSQL_PASSWORD} 等插值正确, 迁移连的是真实 MySQL。
+docker compose -f "$COMPOSE_FILE" run --rm backend alembic upgrade head
+
+echo "==> 启动后端"
+docker compose -f "$COMPOSE_FILE" up -d backend
 
 # ---- 8. 前端 (先 HTTP, 以便申请证书) ----
 echo "==> 写入 HTTP 临时配置并启动前端(Nginx)"
