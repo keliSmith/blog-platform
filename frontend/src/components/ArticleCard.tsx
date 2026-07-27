@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { EyeOutlined, HeartOutlined, UserOutlined, CalendarOutlined } from '@ant-design/icons';
 import type { Article } from '../types';
 import { useTranslation } from '../i18n';
+import { extractTitleFromHtml, extractFirstParagraph } from '../utils/content';
 
 const { Text, Paragraph } = Typography;
 
@@ -32,6 +33,12 @@ function formatDate(dateStr?: string): string {
 
 function ArticleCard({ article, onClick, showStatus, actions }: ArticleCardProps) {
   const { t } = useTranslation();
+
+  // 标题直接采用文章内容的标题（首个 h1 / 标题，其次首段），退而求其次用原字段
+  const cardTitle = extractTitleFromHtml(article.content || '', article.title) || t('untitled');
+  // 描述直接采用文章内容第一段文本，退而求其次用原 summary 字段
+  const cardDesc = extractFirstParagraph(article.content || '') || article.summary || '';
+
   const handleClick = useCallback(() => {
     onClick?.();
   }, [onClick]);
@@ -72,9 +79,9 @@ function ArticleCard({ article, onClick, showStatus, actions }: ArticleCardProps
           }}
         >
           {article.cover_image ? (
-            <Image
+              <Image
               src={article.cover_image}
-              alt={article.title}
+              alt={cardTitle}
               width="100%"
               height={coverHeight}
               style={{ objectFit: 'cover', display: 'block' }}
@@ -132,22 +139,22 @@ function ArticleCard({ article, onClick, showStatus, actions }: ArticleCardProps
           )}
         </div>
 
-        {/* 标题：单行省略，保证卡片高度一致 */}
+        {/* 标题：直接采用文章内容的标题（首个 h1），单行省略，保证卡片高度一致 */}
         <Text
           strong
           ellipsis
           style={{ display: 'block', width: '100%', fontSize: 20, lineHeight: 1.4 }}
         >
-          {article.title}
+          {cardTitle}
         </Text>
 
-        {/* 摘要：单行省略；始终保留一行高度，避免有无摘要时卡片高度不一致 */}
+        {/* 描述：直接采用文章内容第一段文本，单行省略 */}
         <Paragraph
           type="secondary"
           ellipsis
           style={{ marginBottom: 0, fontSize: 15, minHeight: 22, lineHeight: 1.5 }}
         >
-          {article.summary || ' '}
+          {cardDesc || ' '}
         </Paragraph>
 
         <Space wrap size={[16, 8]}>

@@ -23,7 +23,6 @@ function TagFormModal({ open, editing, onClose, onSuccess }: TagFormModalProps) 
       if (editing) {
         form.setFieldsValue({
           name: editing.name,
-          slug: editing.slug,
           description: editing.description || '',
         });
       } else {
@@ -65,13 +64,6 @@ function TagFormModal({ open, editing, onClose, onSuccess }: TagFormModalProps) 
           name="name"
           label={t('name')}
           rules={[{ required: true, message: t('nameRequired') }]}
-        >
-          <Input />
-        </Form.Item>
-        <Form.Item
-          name="slug"
-          label={t('slug')}
-          rules={[{ required: true, message: t('slugRequired') }]}
         >
           <Input />
         </Form.Item>

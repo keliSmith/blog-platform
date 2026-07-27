@@ -7,15 +7,15 @@ import {
   Select,
   Button,
   Upload,
-  Typography,
-  Space,
   Row,
   Col,
   message,
   Spin,
   Segmented,
+  Avatar,
+  theme,
 } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { InboxOutlined, ArrowLeftOutlined, UserOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -41,13 +41,15 @@ import { BubbleToolbar, EditorToolbar } from '../components/editor/editorUI';
 import { Callout } from '../components/editor/callout';
 import { MathInline, MathBlock } from '../components/editor/math';
 import { FontSize } from '../components/editor/fontSize';
+import OutlinePanel from '../components/OutlinePanel';
+import { useAuthStore } from '../store/authStore';
 import type { Category, Tag, ArticleFormData } from '../types';
 import '../styles/prose.css';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github.css';
 import { useTranslation } from '../i18n';
+import { deriveTitle, deriveSummary, prependTitleToHtml } from '../utils/content';
 
-const { Title } = Typography;
 const { TextArea } = Input;
 const { Dragger } = Upload;
 
@@ -67,11 +69,22 @@ function mdToHtml(md: string): string {
   return marked.parse(md || '', { async: false }) as string;
 }
 
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function ArticleEditor() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const { t } = useTranslation();
+  const { user } = useAuthStore();
+  const { token } = theme.useToken();
 
   const [form] = Form.useForm<ArticleFormData>();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -80,6 +93,17 @@ function ArticleEditor() {
   const [submitting, setSubmitting] = useState(false);
   const [coverUrl, setCoverUrl] = useState<string>('');
   const [coverFileList, setCoverFileList] = useState<UploadFile[]>([]);
+
+  // 作者信息栏（新增页取当前登录用户，编辑页取文章作者）
+  const [authorInfo, setAuthorInfo] = useState<{
+    name: string;
+    avatar?: string;
+    date?: string;
+  }>({
+    name: user?.username || '',
+    avatar: user?.avatar,
+    date: undefined,
+  });
 
   // 双模式编辑：富文本 / Markdown
   const [editorMode, setEditorMode] = useState<'rich' | 'markdown'>('rich');
@@ -179,31 +203,34 @@ function ArticleEditor() {
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const saveTimer = useRef<number | null>(null);
 
+  // 实时统计字数 / 阅读时长 / 大纲（编辑时随 update 触发）
+  const syncEditorStats = useCallback(() => {
+    if (!editor) return;
+    const text = editor.getText();
+    const chars = text.replace(/\s/g, '').length;
+    setWordCount(chars);
+    setReadingMinutes(Math.max(1, Math.round(chars / 400)));
+    const items: { level: number; text: string; pos: number }[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'heading') {
+        items.push({
+          level: node.attrs.level,
+          text: node.textContent || t('untitled'),
+          pos,
+        });
+      }
+    });
+    setOutline(items);
+  }, [editor, t]);
+
   useEffect(() => {
     if (!editor) return;
-    const sync = () => {
-      const text = editor.getText();
-      const chars = text.replace(/\s/g, '').length;
-      setWordCount(chars);
-      setReadingMinutes(Math.max(1, Math.round(chars / 400)));
-      const items: { level: number; text: string; pos: number }[] = [];
-      editor.state.doc.descendants((node, pos) => {
-        if (node.type.name === 'heading') {
-          items.push({
-            level: node.attrs.level,
-            text: node.textContent || t('untitled'),
-            pos,
-          });
-        }
-      });
-      setOutline(items);
-    };
-    sync();
-    editor.on('update', sync);
+    syncEditorStats();
+    editor.on('update', syncEditorStats);
     return () => {
-      editor.off('update', sync);
+      editor.off('update', syncEditorStats);
     };
-  }, [editor, initialContent, t]);
+  }, [editor, syncEditorStats]);
 
   // 自动保存到本地草稿（localStorage），模拟语雀的“已自动保存”
   useEffect(() => {
@@ -227,9 +254,49 @@ function ArticleEditor() {
     };
   }, [editor, id]);
 
+  // 当前阅读章节高亮（富文本模式下，依据编辑器内标题的滚动位置）
+  const [activeIdx, setActiveIdx] = useState(-1);
   const jumpToHeading = useCallback((pos: number) => {
-    editorRef.current?.chain().focus().setTextSelection(pos + 1).scrollIntoView().run();
-  }, []);
+  editorRef.current?.chain().focus().setTextSelection(pos + 1).scrollIntoView().run();
+}, []);
+
+  useEffect(() => {
+    if (!editor || editorMode !== 'rich') {
+      setActiveIdx(-1);
+      return;
+    }
+    let ticking = false;
+    const update = () => {
+      const dom = editor.view.dom as HTMLElement;
+      const heads = Array.from(
+        dom.querySelectorAll('h1, h2, h3'),
+      ) as HTMLElement[];
+      let idx = 0;
+      for (let i = 0; i < heads.length; i++) {
+        if (heads[i].getBoundingClientRect().top <= 120) idx = i;
+        else break;
+      }
+      setActiveIdx(idx);
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    update();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [editor, editorMode, outline]);
+
+  const handleOutlineJump = useCallback(
+    (i: number) => {
+      const item = outline[i];
+      if (item) jumpToHeading(item.pos);
+    },
+    [outline, jumpToHeading],
+  );
 
   // 文章加载完成后，把已有正文填入编辑器 / Markdown 源
   useEffect(() => {
@@ -242,7 +309,10 @@ function ArticleEditor() {
       editor.commands.setContent('', { emitUpdate: false });
       setMarkdownValue(html);
     }
-  }, [editor, initialContent]);
+    // setContent 以 emitUpdate:false 调用，不会触发 update 事件，
+    // 需手动刷新字数/时长/大纲，否则编辑已有文章时大纲为空（看不到目录）。
+    syncEditorStats();
+  }, [editor, initialContent, syncEditorStats, turndownService]);
 
   const fetchMeta = useCallback(async () => {
     try {
@@ -262,15 +332,19 @@ function ArticleEditor() {
       if (res.success && res.data) {
         const article = res.data;
         form.setFieldsValue({
-          title: article.title,
-          slug: article.slug,
-          summary: article.summary,
           status: article.status,
           category_id: article.category_id,
           tags: article.tags?.map((t) => t.id),
           cover_image: article.cover_image,
         });
-        setInitialContent(article.content || '');
+        setAuthorInfo({
+          name: article.author_name || article.author?.username || user?.username || '',
+          avatar: article.author?.avatar,
+          date: article.updated_at || article.created_at,
+        });
+        // 语雀风格：标题即正文首个 h1。编辑已有文章时把后端 title 安全前置为 h1，
+        // 不再使用独立的标题输入框。
+        setInitialContent(prependTitleToHtml(article.title || '', article.content || ''));
         if (article.cover_image) {
           setCoverUrl(article.cover_image);
           setCoverFileList([
@@ -343,60 +417,38 @@ function ArticleEditor() {
     [isEdit, id, navigate, t],
   );
 
-  // 组装提交数据（slug 为空时不上传，交由后端自动生成）
+  // 组装提交数据（slug 由后端根据标题自动生成）
   const buildPayload = useCallback(
-    (values: Partial<ArticleFormData>, forceStatus: 'draft' | 'published'): ArticleFormData => {
+    (forceStatus: 'draft' | 'published'): ArticleFormData => {
+      const content = getCurrentContent();
+      const values = form.getFieldsValue(true) as Partial<ArticleFormData>;
       const payload: ArticleFormData = {
-        title: (values.title || '').trim(),
-        content: getCurrentContent(),
-        summary: values.summary?.trim() || undefined,
+        title: deriveTitle(content, t('untitledDoc')),
+        content,
+        summary: deriveSummary(content) || undefined,
         status: forceStatus,
         category_id: values.category_id,
         tags: values.tags || [],
         cover_image: values.cover_image,
       };
-      const slug = values.slug?.trim();
-      if (slug) payload.slug = slug;
       return payload;
     },
-    [getCurrentContent],
+    [getCurrentContent, form, t],
   );
 
-  // 发布 / 更新：校验标题与正文
-  const handleSubmit = (values: Partial<ArticleFormData>) => {
-    if (!values.title?.trim()) {
-      message.warning(t('titleRequired'));
-      return;
-    }
+  // 发布 / 更新：要求正文非空（标题由正文首个标题/首行自动推导）
+  const handleSubmit = () => {
     if (!getPlainText()) {
       message.warning(t('contentRequired'));
       return;
     }
-    handleSave(buildPayload(values, 'published'), 'published');
+    handleSave(buildPayload('published'), 'published');
   };
 
-  // 保存草稿：仅要求标题，slug 与正文可空（后端自动生成 slug）
+  // 保存草稿：允许正文暂为空，标题自动推导（无内容时回退“无标题文档”）
   const handleSaveDraft = async () => {
-    const values = form.getFieldsValue(true) as Partial<ArticleFormData>;
-    if (!values.title || !values.title.trim()) {
-      message.warning(t('draftTitleRequired'));
-      return;
-    }
-    handleSave(buildPayload(values, 'draft'), 'draft');
+    handleSave(buildPayload('draft'), 'draft');
   };
-
-  const handleTitleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!isEdit) {
-        const slug = e.target.value
-          .toLowerCase()
-          .replace(/[^a-z0-9一-龥]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        form.setFieldValue('slug', slug);
-      }
-    },
-    [form, isEdit],
-  );
 
   const switchMode = (mode: 'rich' | 'markdown') => {
     if (mode === editorMode) return;
@@ -448,39 +500,44 @@ function ArticleEditor() {
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-      <Title level={3} style={{ marginBottom: 24 }}>
-        {isEdit ? t('editArticleTitle') : t('writeArticleTitle')}
-      </Title>
-
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div className="ad-layout">
         <div style={{ flex: 1, minWidth: 0 }}>
+          {/* 顶部：作者信息栏 + 操作栏（语雀风格，与详情页一致） */}
+          <div className="ad-topbar">
+            <div className="ad-author">
+              <Avatar
+                size={40}
+                src={authorInfo.avatar || undefined}
+                icon={<UserOutlined />}
+                style={{ background: token.colorPrimary, flex: 'none' }}
+              />
+              <div style={{ minWidth: 0 }}>
+                <div className="ad-author__name">{authorInfo.name || t('anonymous')}</div>
+                <div className="ad-author__meta">
+                  {authorInfo.date ? formatDate(authorInfo.date) : t('editing')}
+                </div>
+              </div>
+            </div>
+
+            <div className="ad-actionbar">
+              <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
+                {t('cancel')}
+              </Button>
+              <Button onClick={handleSaveDraft} loading={submitting} size="large">
+                {t('saveDraft')}
+              </Button>
+              <Button type="primary" onClick={handleSubmit} loading={submitting} size="large">
+                {isEdit ? t('update') : t('publish')}
+              </Button>
+            </div>
+          </div>
+
           <Card style={{ borderRadius: 8 }}>
             <Form<ArticleFormData>
               form={form}
               layout="vertical"
-              onFinish={handleSubmit}
               initialValues={{}}
             >
-          <Form.Item
-            name="title"
-            label={t('title')}
-            rules={[{ required: true, message: 'Please enter the article title' }]}
-          >
-            <Input size="large" placeholder="Article title" onChange={handleTitleChange} />
-          </Form.Item>
-
-          <Form.Item
-            name="slug"
-            label={t('slugLabel')}
-            tooltip={t('slugTooltip')}
-          >
-            <Input size="large" placeholder={t('slugPlaceholder')} />
-          </Form.Item>
-
-          <Form.Item name="summary" label={t('summary')}>
-            <TextArea rows={3} placeholder={t('summaryPlaceholder')} />
-          </Form.Item>
-
           <Form.Item label={t('content')}>
             <Segmented<'rich' | 'markdown'>
               value={editorMode}
@@ -504,8 +561,6 @@ function ArticleEditor() {
                       borderRadius: 8,
                       padding: 16,
                       minHeight: 360,
-                      maxHeight: 640,
-                      overflowY: 'auto',
                     }}
                   />
                 </div>
@@ -517,7 +572,7 @@ function ArticleEditor() {
               <TextArea
                 value={markdownValue}
                 onChange={(e) => setMarkdownValue(e.target.value)}
-                rows={16}
+                autoSize
                 placeholder={t('markdownPlaceholder')}
                 style={{ fontFamily: 'monospace', minHeight: 360 }}
               />
@@ -585,20 +640,6 @@ function ArticleEditor() {
               />
             )}
           </Form.Item>
-
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Space wrap>
-              <Button onClick={handleSaveDraft} loading={submitting} size="large">
-                {t('saveDraft')}
-              </Button>
-              <Button type="primary" htmlType="submit" loading={submitting} size="large">
-                {isEdit ? t('update') : t('publish')}
-              </Button>
-              <Button onClick={() => navigate(-1)} size="large">
-                {t('cancel')}
-              </Button>
-            </Space>
-          </Form.Item>
         </Form>
       </Card>
 
@@ -616,22 +657,8 @@ function ArticleEditor() {
       </div>
         </div>
 
-        {outline.length > 0 && (
-          <aside className="outline-panel">
-            <div className="outline-panel__title">{t('outline')}</div>
-            {outline.map((h, i) => (
-              <button
-                key={`${h.pos}-${i}`}
-                type="button"
-                className={`outline-item outline-item--l${h.level}`}
-                onClick={() => jumpToHeading(h.pos)}
-                title={h.text}
-              >
-                {h.text}
-              </button>
-            ))}
-          </aside>
-        )}
+        {/* 右侧大纲（语雀风格，与详情页统一） */}
+        <OutlinePanel items={outline} activeIndex={activeIdx} onJump={handleOutlineJump} emptyHint={t('outlineEmptyHint')} />
       </div>
     </div>
   );

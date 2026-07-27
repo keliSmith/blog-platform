@@ -22,7 +22,6 @@ function CategoryModal({ open, editingCategory, onClose, onSuccess }: CategoryMo
       if (editingCategory) {
         form.setFieldsValue({
           name: editingCategory.name,
-          slug: editingCategory.slug,
           description: editingCategory.description || '',
         });
       } else {
@@ -71,13 +70,6 @@ function CategoryModal({ open, editingCategory, onClose, onSuccess }: CategoryMo
           name="name"
           label={t('name')}
           rules={[{ required: true, message: t('nameRequired') }]}
-        >
-          <Input />
-        </Form.Item>
-        <Form.Item
-          name="slug"
-          label={t('slug')}
-          rules={[{ required: true, message: t('slugRequired') }]}
         >
           <Input />
         </Form.Item>

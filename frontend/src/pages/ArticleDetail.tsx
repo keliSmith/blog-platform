@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Skeleton,
@@ -7,11 +7,12 @@ import {
   Typography,
   Space,
   Tag,
-  Image,
   Card,
+  Avatar,
   message,
   Grid,
   Popconfirm,
+  theme,
 } from 'antd';
 import {
   HeartOutlined,
@@ -22,9 +23,10 @@ import {
   UserOutlined,
   CalendarOutlined,
   ArrowLeftOutlined,
-  HomeOutlined,
   EditOutlined,
   RollbackOutlined,
+  LinkOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import { getArticleBySlug, unpublishArticle } from '../api/articles';
 import { likeArticle, unlikeArticle, getLikeInfo } from '../api/likes';
@@ -32,13 +34,20 @@ import { favoriteArticle, unfavoriteArticle, getFavoriteInfo } from '../api/favo
 import type { Article } from '../types';
 import { useAuthStore } from '../store/authStore';
 import CommentList from '../components/CommentList';
+import OutlinePanel from '../components/OutlinePanel';
 import DOMPurify from 'dompurify';
 import { renderMathInElement } from '../utils/mathRender';
+import {
+  extractOutline,
+  countReadingMinutes,
+  prependTitleToHtml,
+} from '../utils/content';
 import '../styles/prose.css';
+import '../styles/articleDetail.css';
 import 'katex/dist/katex.min.css';
 import { useTranslation } from '../i18n';
 
-const { Title, Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 const { useBreakpoint } = Grid;
 
 // Articles already viewed in this browser session. Used to skip re-counting
@@ -63,6 +72,7 @@ function ArticleDetail() {
   const isMobile = !screens.md;
   const { user } = useAuthStore();
   const { t } = useTranslation();
+  const { token } = theme.useToken();
 
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,6 +162,21 @@ function ArticleDetail() {
   }, [user, article?.id]);
 
   const proseRef = useRef<HTMLDivElement>(null);
+  const commentsRef = useRef<HTMLDivElement>(null);
+
+  // 语雀风格：标题即正文首个 h1。详情页直接展示正文（首个 h1 作为标题），
+  // 不再单独渲染标题栏。若正文未以 h1 开头，则把后端 title 安全前置为 h1。
+  const displayContent = useMemo(() => {
+    if (!article?.content) return '';
+    return prependTitleToHtml(article.title || '', article.content);
+  }, [article?.title, article?.content]);
+
+  // 目录大纲与阅读时长（均从正文推导）
+  const outline = useMemo(() => extractOutline(displayContent), [displayContent]);
+  const readingMinutes = useMemo(
+    () => countReadingMinutes(displayContent),
+    [displayContent],
+  );
 
   // 阅读视图补全 KaTeX 公式渲染（编辑器以 data-latex 形式序列化公式）
   useEffect(() => {
@@ -159,6 +184,61 @@ function ArticleDetail() {
       renderMathInElement(proseRef.current);
     }
   }, [article?.content]);
+
+  // 阅读进度条 + 目录当前章节高亮（滚动驱动，rAF 节流）
+  const [progress, setProgress] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const tickingRef = useRef(false);
+
+  useEffect(() => {
+    const update = () => {
+      const el = document.documentElement;
+      const max = el.scrollHeight - el.clientHeight;
+      setProgress(max > 0 ? (el.scrollTop / max) * 100 : 0);
+      const root = proseRef.current;
+      if (root) {
+        const heads = Array.from(
+          root.querySelectorAll('h1, h2, h3'),
+        ) as HTMLElement[];
+        let idx = 0;
+        for (let i = 0; i < heads.length; i++) {
+          if (heads[i].getBoundingClientRect().top <= 100) idx = i;
+          else break;
+        }
+        setActiveIdx(idx);
+      }
+      tickingRef.current = false;
+    };
+    const onScroll = () => {
+      if (!tickingRef.current) {
+        tickingRef.current = true;
+        requestAnimationFrame(update);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    update();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [displayContent]);
+
+  const jumpToHeading = useCallback((idx: number) => {
+    const root = proseRef.current;
+    if (!root) return;
+    const heads = root.querySelectorAll('h1, h2, h3');
+    const target = heads[idx] as HTMLElement | undefined;
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const handleCopyLink = useCallback(() => {
+    const url = window.location.href;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(url)
+        .then(() => message.success(t('linkCopied')))
+        .catch(() => message.error(t('copyLink')));
+    } else {
+      message.info(url);
+    }
+  }, [t]);
 
   const handleLike = useCallback(async () => {
     if (!article) return;
@@ -259,9 +339,15 @@ function ArticleDetail() {
   // 作者本人对已发布文章可取消发布
   const canUnpublish = canEdit && article.status === 'published';
 
+  const authorName = article.author_name || article.author?.username || t('anonymous');
+  const isHtmlContent = displayContent && /<[a-z][\s\S]*>/i.test(displayContent);
+
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto' }}>
-      <Space wrap style={{ marginBottom: 16 }}>
+    <div style={{ maxWidth: 1180, margin: '0 auto', padding: isMobile ? '8px 12px' : '16px 24px' }}>
+      {/* 阅读进度条（顶部吸顶，超越语雀的沉浸阅读反馈） */}
+      <div className="ad-progress" style={{ width: `${progress}%`, background: token.colorPrimary }} />
+
+      <Space wrap style={{ marginBottom: 20 }}>
         <Button
           type="text"
           icon={<ArrowLeftOutlined />}
@@ -269,14 +355,6 @@ function ArticleDetail() {
           style={{ padding: 0 }}
         >
           {t('back')}
-        </Button>
-        <Button
-          type="text"
-          icon={<HomeOutlined />}
-          onClick={() => navigate('/', { state: { refresh: Date.now() } })}
-          style={{ padding: 0 }}
-        >
-          {t('backHome')}
         </Button>
         {canEdit && (
           <Button
@@ -290,104 +368,134 @@ function ArticleDetail() {
         )}
       </Space>
 
-      <Title level={2} style={{ marginBottom: 16 }}>
-        {article.title}
-      </Title>
+      <div className="ad-layout">
+        {/* 主阅读区 */}
+        <div className="ad-main">
+          {/* 顶部：作者信息栏 + 操作栏（语雀风格，与编辑页一致） */}
+          <div className="ad-topbar">
+            <div className="ad-author">
+              <Avatar
+                size={44}
+                src={article.author?.avatar || undefined}
+                icon={<UserOutlined />}
+                style={{ background: token.colorPrimary, flex: 'none' }}
+              />
+              <div style={{ minWidth: 0 }}>
+                <div className="ad-author__name">{authorName}</div>
+                <div className="ad-author__meta">
+                  <span>
+                    <CalendarOutlined style={{ marginRight: 4 }} />
+                    {formatDate(article.published_at || article.created_at)}
+                  </span>
+                  <span>
+                    <EyeOutlined style={{ marginRight: 4 }} />
+                    {`${article.views} ${t('views')}`}
+                  </span>
+                  <span>{t('readMinutes', { n: readingMinutes })}</span>
+                </div>
+                {(article.category_name || (article.tags && article.tags.length > 0)) && (
+                  <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {article.category_name && <Tag color="blue">{article.category_name}</Tag>}
+                    {article.tags?.map((tag) => (
+                      <Tag key={tag.id}>{tag.name}</Tag>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
-      <Space wrap size={[16, 8]} style={{ marginBottom: 24 }}>
-        <Text type="secondary">
-          <UserOutlined style={{ marginRight: 4 }} />
-          {article.author_name || article.author?.username || t('anonymous')}
-        </Text>
-        <Text type="secondary">
-          <CalendarOutlined style={{ marginRight: 4 }} />
-          {formatDate(article.published_at || article.created_at)}
-        </Text>
-        <Text type="secondary">
-          <EyeOutlined style={{ marginRight: 4 }} />
-          {`${article.views} ${t('views')}`}
-        </Text>
-        {article.category_name && (
-          <Tag color="blue">{article.category_name}</Tag>
-        )}
-        {article.tags?.map((tag) => (
-          <Tag key={tag.id}>{tag.name}</Tag>
-        ))}
-      </Space>
+            <div className="ad-actionbar">
+              <Button
+                type={liked ? 'primary' : 'default'}
+                icon={liked ? <HeartFilled /> : <HeartOutlined />}
+                onClick={handleLike}
+              >
+                {liked ? t('liked') : t('like')} {likeCount > 0 && `(${likeCount})`}
+              </Button>
+              <Button
+                icon={favorited ? <StarFilled /> : <StarOutlined />}
+                onClick={handleFavorite}
+                style={favorited ? { color: '#faad14', borderColor: '#faad14' } : undefined}
+              >
+                {favorited ? t('favorited') : t('favorite')} {favoriteCount > 0 && `(${favoriteCount})`}
+              </Button>
+              <Button icon={<LinkOutlined />} onClick={handleCopyLink}>
+                {t('copyLink')}
+              </Button>
+              {canUnpublish && (
+                <Popconfirm
+                  title={t('confirmUnpublishTitle')}
+                  description={t('confirmUnpublishDesc')}
+                  okText={t('unpublish')}
+                  cancelText={t('cancel')}
+                  okButtonProps={{ danger: true }}
+                  onConfirm={handleUnpublish}
+                >
+                  <Button icon={<RollbackOutlined />}>{t('unpublish')}</Button>
+                </Popconfirm>
+              )}
+            </div>
+          </div>
 
-      <Card
-        size="small"
-        style={{ marginBottom: 24, borderRadius: 8 }}
-        styles={{ body: { padding: '12px 16px' } }}
-      >
-        <Space wrap>
+          <Card
+            style={{ marginBottom: 32, borderRadius: 8, background: 'transparent', border: 'none', boxShadow: 'none' }}
+            styles={{ body: { padding: isMobile ? 4 : 8 } }}
+          >
+            {isHtmlContent ? (
+              <div
+                ref={proseRef}
+                className="article-prose"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(displayContent, { ADD_ATTR: ['style'] }),
+                }}
+              />
+            ) : (
+              <Paragraph
+                style={{
+                  fontSize: 16,
+                  lineHeight: 1.8,
+                  whiteSpace: 'pre-wrap',
+                  margin: 0,
+                }}
+              >
+                {displayContent}
+              </Paragraph>
+            )}
+          </Card>
+
+          <div ref={commentsRef}>
+            <Card title={t('comments')} style={{ borderRadius: 8 }}>
+              <CommentList articleId={article.id} />
+            </Card>
+          </div>
+        </div>
+
+        {/* 右侧大纲（语雀风格，与编辑/新增页统一） */}
+        <OutlinePanel items={outline} activeIndex={activeIdx} onJump={jumpToHeading} />
+      </div>
+
+      {/* 移动端底部操作条（吸底，便于点赞/收藏/跳转评论） */}
+      {isMobile && (
+        <div className="ad-bottombar" style={{ background: token.colorBgContainer, borderTop: `1px solid ${token.colorBorder}` }}>
           <Button
-            type={liked ? 'primary' : 'default'}
             icon={liked ? <HeartFilled /> : <HeartOutlined />}
             onClick={handleLike}
+            style={liked ? { color: token.colorPrimary } : undefined}
           >
-            {liked ? t('liked') : t('like')} {likeCount > 0 && `(${likeCount})`}
+            {likeCount > 0 ? likeCount : t('like')}
           </Button>
           <Button
             icon={favorited ? <StarFilled /> : <StarOutlined />}
             onClick={handleFavorite}
-            style={favorited ? { color: '#faad14', borderColor: '#faad14' } : undefined}
+            style={favorited ? { color: '#faad14' } : undefined}
           >
-            {favorited ? t('favorited') : t('favorite')} {favoriteCount > 0 && `(${favoriteCount})`}
+            {favoriteCount > 0 ? favoriteCount : t('favorite')}
           </Button>
-          {canUnpublish && (
-            <Popconfirm
-              title={t('confirmUnpublishTitle')}
-              description={t('confirmUnpublishDesc')}
-              okText={t('unpublish')}
-              cancelText={t('cancel')}
-              okButtonProps={{ danger: true }}
-              onConfirm={handleUnpublish}
-            >
-              <Button icon={<RollbackOutlined />}>{t('unpublish')}</Button>
-            </Popconfirm>
-          )}
-          <Text type="secondary">
-            {article.status === 'published' ? t('published') : t('draft')}
-          </Text>
-        </Space>
-      </Card>
-
-      <Card
-        style={{ marginBottom: 32, borderRadius: 8 }}
-        styles={{
-          body: {
-            padding: isMobile ? 16 : 24,
-            maxHeight: 'calc(100vh - 220px)',
-            overflowY: 'auto',
-          },
-        }}
-      >
-        {article.content && /<[a-z][\s\S]*>/i.test(article.content) ? (
-          <div
-            ref={proseRef}
-            className="article-prose"
-            dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(article.content, { ADD_ATTR: ['style'] }),
-            }}
-          />
-        ) : (
-          <Paragraph
-            style={{
-              fontSize: 16,
-              lineHeight: 1.8,
-              whiteSpace: 'pre-wrap',
-              margin: 0,
-            }}
-          >
-            {article.content}
-          </Paragraph>
-        )}
-      </Card>
-
-      <Card title={t('comments')} style={{ borderRadius: 8 }}>
-        <CommentList articleId={article.id} />
-      </Card>
+          <Button icon={<MessageOutlined />} onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+            {t('comments')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

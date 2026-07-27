@@ -41,7 +41,7 @@ export interface Article {
   status: 'draft' | 'published';
   author_id?: number;
   author_name?: string;
-  author?: { id: number; username: string };
+  author?: { id: number; username: string; avatar?: string };
   category_id?: number;
   category_name?: string;
   category?: Category | null;
@@ -87,7 +87,6 @@ export interface PaginatedResponse<T = unknown> {
 
 export interface ArticleFormData {
   title: string;
-  slug?: string;
   content: string;
   summary?: string;
   status?: 'draft' | 'published';
@@ -98,13 +97,11 @@ export interface ArticleFormData {
 
 export interface CategoryFormData {
   name: string;
-  slug: string;
   description?: string;
 }
 
 export interface TagFormData {
   name: string;
-  slug: string;
   description?: string;
 }
 

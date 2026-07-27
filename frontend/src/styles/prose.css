@@ -444,25 +444,32 @@
   color: #1677ff;
 }
 
-/* ============ 大纲目录（语雀风格右侧栏） ============ */
+/* ============ 大纲目录（语雀风格 · 右侧栏，文字左对齐） ============ */
 
 .outline-panel {
-  flex: 0 0 220px;
+  flex: 0 0 200px;
   position: sticky;
-  top: 24px;
+  top: 88px;
   align-self: flex-start;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
-  border-left: 2px solid #f0f0f0;
-  padding: 4px 0 4px 14px;
+  padding: 4px 0;
 }
 
 .outline-panel__title {
   font-size: 12px;
   font-weight: 600;
-  color: #999;
-  margin-bottom: 8px;
-  letter-spacing: 0.05em;
+  color: #8c8c8c;
+  margin-bottom: 10px;
+  padding-left: 10px;
+  text-align: left;
+  letter-spacing: 0.06em;
+}
+
+.outline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .outline-item {
@@ -473,13 +480,15 @@
   background: transparent;
   color: #595959;
   font-size: 13px;
-  line-height: 1.5;
-  padding: 3px 6px;
-  border-radius: 4px;
+  line-height: 1.55;
+  padding: 4px 10px;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .outline-item:hover {
@@ -487,18 +496,42 @@
   color: #1677ff;
 }
 
+/* 当前阅读章节高亮（语雀风格：主题色文字 + 浅底色 + 左侧色条） */
+.outline-item.is-active {
+  color: #1677ff;
+  background: rgba(22, 119, 255, 0.08);
+  border-left-color: #1677ff;
+  font-weight: 600;
+}
+
 .outline-item--l1 {
   font-weight: 600;
   color: #1f1f1f;
 }
+.outline-item--l1.is-active {
+  color: #1677ff;
+}
 
 .outline-item--l2 {
-  padding-left: 16px;
+  padding-left: 22px;
 }
 
 .outline-item--l3 {
-  padding-left: 30px;
+  padding-left: 38px;
   font-size: 12px;
+}
+
+.outline-item--l4 {
+  padding-left: 54px;
+  font-size: 12px;
+}
+
+/* 空大纲占位（编辑页：尚未添加标题时仍展示大纲面板） */
+.outline-empty {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #bfbfbf;
+  line-height: 1.6;
 }
 
 @media (max-width: 900px) {
@@ -702,10 +735,6 @@
 }
 
 /* ---- 大纲面板 dark ---- */
-.dark .outline-panel {
-  border-left-color: #303030;
-}
-
 .dark .outline-panel__title {
   color: rgba(255, 255, 255, 0.45);
 }
@@ -719,8 +748,21 @@
   color: #4096ff;
 }
 
+.dark .outline-item.is-active {
+  color: #4096ff;
+  background: rgba(64, 150, 255, 0.18);
+  border-left-color: #4096ff;
+}
+
+.dark .outline-empty {
+  color: rgba(255, 255, 255, 0.35);
+}
+
 .dark .outline-item--l1 {
   color: rgba(255, 255, 255, 0.88);
+}
+.dark .outline-item--l1.is-active {
+  color: #4096ff;
 }
 
 /* ---- 代码高亮 github-dark 配色 ---- */
