@@ -60,7 +60,8 @@ async def test_register_email_success(client):
     assert data["message"] == "注册成功"
     assert data["data"]["token"]
     assert data["data"]["user"]["email"] == "new@example.com"
-    assert data["data"]["user"]["email_verified"] is True
+    # PRD §4.8: registration must NOT auto-verify the contact anymore.
+    assert data["data"]["user"]["email_verified"] is False
 
 
 @pytest.mark.anyio
@@ -79,7 +80,8 @@ async def test_register_phone_success(client):
     data = resp.json()
     assert data["success"] is True
     assert data["data"]["user"]["phone"] == phone
-    assert data["data"]["user"]["phone_verified"] is True
+    # PRD §4.8: registration must NOT auto-verify the contact anymore.
+    assert data["data"]["user"]["phone_verified"] is False
     assert data["data"]["user"]["email"] is None
 
 
@@ -244,3 +246,169 @@ async def test_jwt_protected_route_with_token(client, auth_headers):
     assert resp.status_code == 200
     assert data["success"] is True
     assert "data" in data
+
+
+# ---------------------------------------------------------------------------
+# Post-registration verification (PRD §4.8 — VF-2 / VF-3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_verify_email_flow(client):
+    # Register (no longer auto-verified).
+    reg = await register_via_email(client, "verifyme", "verify@example.com", "Password123")
+    assert reg["data"]["user"]["email_verified"] is False
+
+    # Login to get a token.
+    login = await client.post("/api/login", json={
+        "username": "verifyme", "password": "Password123"
+    })
+    token = login.json()["data"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Resend a verify code (target derived from user, not client).
+    resend = await client.post("/api/auth/resend-verify", json={"channel": "email"}, headers=headers)
+    assert resend.status_code == 200
+    assert resend.json()["success"] is True
+
+    code = await latest_code("verify@example.com", "email", "verify")
+    assert code is not None
+
+    # Verify with the code.
+    verify = await client.post("/api/auth/verify-email", json={"code": code}, headers=headers)
+    assert verify.status_code == 200
+    assert verify.json()["success"] is True
+
+    # Idempotent: verifying again (already verified) succeeds without a code.
+    verify_again = await client.post("/api/auth/verify-email", json={"code": "000000"}, headers=headers)
+    assert verify_again.status_code == 200
+    assert verify_again.json()["success"] is True
+
+    # Profile now reflects verified.
+    me = await client.get("/api/me", headers=headers)
+    assert me.json()["data"]["email_verified"] is True
+
+
+@pytest.mark.anyio
+async def test_verify_email_wrong_code(client):
+    await register_via_email(client, "wrongcode", "wrongcode@example.com", "Password123")
+    login = await client.post("/api/login", json={
+        "username": "wrongcode", "password": "Password123"
+    })
+    token = login.json()["data"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    await client.post("/api/auth/resend-verify", json={"channel": "email"}, headers=headers)
+    verify = await client.post("/api/auth/verify-email", json={"code": "000000"}, headers=headers)
+    assert verify.status_code == 400
+    assert verify.json()["success"] is False
+    assert "验证码" in verify.json()["message"]
+
+
+@pytest.mark.anyio
+async def test_verify_email_requires_auth(client):
+    resp = await client.post("/api/auth/verify-email", json={"code": "123456"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_resend_verify_rejects_already_verified(client):
+    # Register, then directly flip verified via the verify flow.
+    await register_via_email(client, "alreadyv", "alreadyv@example.com", "Password123")
+    login = await client.post("/api/login", json={
+        "username": "alreadyv", "password": "Password123"
+    })
+    token = login.json()["data"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    await client.post("/api/auth/resend-verify", json={"channel": "email"}, headers=headers)
+    code = await latest_code("alreadyv@example.com", "email", "verify")
+    await client.post("/api/auth/verify-email", json={"code": code}, headers=headers)
+
+    # Now resending for an already-verified channel is rejected.
+    resend = await client.post("/api/auth/resend-verify", json={"channel": "email"}, headers=headers)
+    assert resend.status_code == 400
+    assert "已验证" in resend.json()["message"]
+
+
+@pytest.mark.anyio
+async def test_resend_verify_rate_limited(client):
+    await register_via_email(client, "ratelimit", "ratelimit@example.com", "Password123")
+    login = await client.post("/api/login", json={
+        "username": "ratelimit", "password": "Password123"
+    })
+    token = login.json()["data"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    first = await client.post("/api/auth/resend-verify", json={"channel": "email"}, headers=headers)
+    assert first.status_code == 200
+    # Immediate second attempt within the 60s window is rejected with 429.
+    second = await client.post("/api/auth/resend-verify", json={"channel": "email"}, headers=headers)
+    assert second.status_code == 429
+    assert "频繁" in second.json()["message"]
+
+
+# ---------------------------------------------------------------------------
+# Restricted-action interception (PRD §4.8 — VF-4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_unverified_old_user_blocked_from_comment(client, settings):
+    # An account created long ago and never verified should be blocked.
+    await register_via_email(client, "olduser", "olduser@example.com", "Password123")
+    login = await client.post("/api/login", json={
+        "username": "olduser", "password": "Password123"
+    })
+    token = login.json()["data"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Force the account to look old by back-dating created_at beyond the grace
+    # period (settings fixture provides access via monkeypatch-friendly object).
+    from app.database import async_session_factory
+    from app.models.user import User as UserModel
+    from datetime import datetime, timedelta, timezone
+    async with async_session_factory() as s:
+        u = await s.get(UserModel, login.json()["data"]["user"]["id"])
+        u.created_at = datetime.now(timezone.utc) - timedelta(days=settings.VERIFICATION_GRACE_DAYS + 1)
+        await s.flush()
+        await s.commit()
+
+    # Create an article to comment on.
+    art = await client.post("/api/articles", json={
+        "title": "Target", "content": "x", "status": "published"
+    }, headers=headers)
+    article_id = art.json()["data"]["id"]
+
+    comment = await client.post(
+        f"/api/comments/article/{article_id}",
+        json={"content": "spam"},
+        headers=headers,
+    )
+    assert comment.status_code == 403
+    assert comment.json()["success"] is False
+    assert comment.json().get("data", {}).get("need_verify") is True
+
+
+@pytest.mark.anyio
+async def test_recent_unverified_user_allowed_to_comment(client):
+    # Newly registered (within grace) unverified users are NOT blocked.
+    await register_via_email(client, "newuser", "newuser@example.com", "Password123")
+    login = await client.post("/api/login", json={
+        "username": "newuser", "password": "Password123"
+    })
+    token = login.json()["data"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    art = await client.post("/api/articles", json={
+        "title": "Target2", "content": "x", "status": "published"
+    }, headers=headers)
+    article_id = art.json()["data"]["id"]
+
+    comment = await client.post(
+        f"/api/comments/article/{article_id}",
+        json={"content": "hi"},
+        headers=headers,
+    )
+    assert comment.status_code == 200
+    assert comment.json()["success"] is True

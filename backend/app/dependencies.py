@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import AsyncSession, get_session
+from app.exceptions import UnverifiedError
 from app.models.user import User
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -103,6 +104,31 @@ async def get_optional_user_id(
 
 CurrentUser = Annotated[int, Depends(get_current_user_id)]
 OptionalUser = Annotated[int | None, Depends(get_optional_user_id)]
+
+
+async def deny_if_unverified(user_id: int, session: AsyncSession) -> None:
+    """Block trust-restricted actions for old, still-unverified accounts.
+
+    Accounts that registered within ``settings.VERIFICATION_GRACE_DAYS`` keep a
+    grace period so brand-new users are not instantly nagged. Once the window
+    passes and *neither* email nor phone is verified, the given action
+    (public comment / favorite / like) is refused with a 403 carrying
+    ``data={"need_verify": True}`` so the client can guide the user to verify.
+    """
+    user = await session.get(User, user_id)
+    if user is None:
+        return
+    # Already verified on either channel — always allowed.
+    if user.email_verified or user.phone_verified:
+        return
+    grace = timedelta(days=settings.VERIFICATION_GRACE_DAYS)
+    created = user.created_at or datetime.now(timezone.utc)
+    # SQLite stores datetimes without tz info; normalize to UTC-aware so the
+    # subtraction below is always between two offset-aware values.
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if (datetime.now(timezone.utc) - created) > grace:
+        raise UnverifiedError()
 
 
 async def get_current_admin(

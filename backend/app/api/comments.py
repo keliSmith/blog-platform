@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from app.database import AsyncSession, get_session
-from app.dependencies import CurrentUser
+from app.dependencies import CurrentUser, deny_if_unverified
 from app.models.comment import Comment
 from app.schemas import ok
 
@@ -68,6 +68,7 @@ async def create_comment(
     user_id: CurrentUser,
     session: AsyncSession = Depends(get_session),
 ):
+    await deny_if_unverified(user_id, session)
     comment = Comment(
         article_id=article_id,
         user_id=user_id,

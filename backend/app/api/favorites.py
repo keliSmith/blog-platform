@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 
 from app.database import AsyncSession, get_session
-from app.dependencies import CurrentUser, OptionalUser
+from app.dependencies import CurrentUser, OptionalUser, deny_if_unverified
 from app.models.interaction import ArticleFavorite
 from app.schemas import ok
 
@@ -22,6 +22,7 @@ async def favorite_article(
     user_id: CurrentUser,
     session: AsyncSession = Depends(get_session),
 ):
+    await deny_if_unverified(user_id, session)
     exists = await session.scalar(
         select(ArticleFavorite.id).where(
             ArticleFavorite.article_id == article_id,

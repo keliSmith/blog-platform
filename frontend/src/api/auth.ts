@@ -54,3 +54,17 @@ export function login(data: LoginData) {
 export function resetPassword(data: ResetPasswordData) {
   return request.post<ApiResponse<unknown>>('/api/auth/reset-password', data);
 }
+
+export function verifyContact(channel: Channel, code: string) {
+  return request.post<ApiResponse<unknown>>(
+    channel === 'email' ? '/api/auth/verify-email' : '/api/auth/verify-phone',
+    { code },
+  );
+}
+
+export function resendVerify(channel: Channel) {
+  return request.post<ApiResponse<{ expires_in?: number; dev_code?: string }>>(
+    '/api/auth/resend-verify',
+    { channel },
+  );
+}

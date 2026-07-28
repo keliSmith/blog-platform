@@ -42,6 +42,14 @@ async def client(setup_database):  # noqa: ARG001
 
 
 @pytest.fixture
+def settings():
+    """Application settings (for reading configurable thresholds in tests)."""
+    from app.config import settings as _settings
+
+    return _settings
+
+
+@pytest.fixture
 async def auth_headers(client):
     """Register (email-verified) + login, return Authorization headers."""
     await register_via_email(client, "testuser", "test@example.com", "Test123456")

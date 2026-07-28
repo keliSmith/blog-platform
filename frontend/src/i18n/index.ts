@@ -210,6 +210,23 @@ const zh: Dict = {
   resetPassword: '重置密码',
   backToLogin: '返回登录',
 
+  // ---- 账号验证（邮箱 / 手机）----
+  verified: '已验证',
+  unverified: '未验证',
+  verifyReminder: '请先验证你的邮箱或手机号，以解锁评论、收藏和点赞等功能',
+  verifyEmail: '验证邮箱',
+  verifyPhone: '验证手机',
+  verifyTitle: '验证联系方式',
+  verifyPlaceholder: '请输入验证码',
+  verifySuccess: '验证成功',
+  verifyFailed: '验证失败',
+  resendVerify: '重新发送验证码',
+  alreadyVerified: '该联系方式已验证',
+  unboundEmail: '未绑定邮箱',
+  verifyNow: '去验证',
+  emailNotVerified: '邮箱未验证',
+  phoneNotVerified: '手机未验证',
+
   // ---- 文章卡片 ----
   blog: '博客',
 
@@ -615,6 +632,23 @@ const en: Dict = {
   resetFail: 'Reset failed',
   resetPassword: 'Reset password',
   backToLogin: 'Back to login',
+
+  // ---- account verification (email / phone) ----
+  verified: 'Verified',
+  unverified: 'Unverified',
+  verifyReminder: 'Please verify your email or phone to unlock commenting, favoriting and liking.',
+  verifyEmail: 'Verify email',
+  verifyPhone: 'Verify phone',
+  verifyTitle: 'Verify contact',
+  verifyPlaceholder: 'Enter the verification code',
+  verifySuccess: 'Verified successfully',
+  verifyFailed: 'Verification failed',
+  resendVerify: 'Resend code',
+  alreadyVerified: 'This contact is already verified',
+  unboundEmail: 'No email bound',
+  verifyNow: 'Verify now',
+  emailNotVerified: 'Email not verified',
+  phoneNotVerified: 'Phone not verified',
 
   // ---- article card ----
   blog: 'Blog',

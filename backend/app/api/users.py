@@ -21,8 +21,11 @@ def _serialize_user(user: User) -> dict:
         "id": user.id,
         "username": user.username,
         "email": user.email,
+        "phone": user.phone,
         "avatar": user.avatar,
         "role": user.role,
+        "email_verified": user.email_verified,
+        "phone_verified": user.phone_verified,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 

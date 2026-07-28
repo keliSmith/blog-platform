@@ -89,6 +89,23 @@ class ResetPasswordRequest(BaseModel):
         return self
 
 
+class VerifyCodeRequest(BaseModel):
+    """Body for ``/api/auth/verify-email`` and ``/api/auth/verify-phone``.
+
+    The verification target (email / phone) is derived from the logged-in
+    user on the server — never trusted from the client — so only the code is
+    accepted here.
+    """
+
+    code: str = Field(..., min_length=4, max_length=10)
+
+
+class ResendVerifyRequest(BaseModel):
+    """Body for ``/api/auth/resend-verify`` — request a fresh verify code."""
+
+    channel: Literal["email", "sms"]
+
+
 class TokenResponse(BaseModel):
     token: str
 

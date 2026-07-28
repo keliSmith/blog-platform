@@ -19,13 +19,24 @@ import {
   Row,
   Col,
   Pagination,
+  Tag,
+  Alert,
+  Modal,
 } from 'antd';
-import { UserOutlined, EditOutlined, LockOutlined, CameraOutlined } from '@ant-design/icons';
+import {
+  UserOutlined,
+  EditOutlined,
+  LockOutlined,
+  CameraOutlined,
+  SafetyOutlined,
+} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { getProfile, updateProfile, getMyComments, updatePassword } from '../api/user';
 import { getMyArticles } from '../api/articles';
 import { uploadAvatar } from '../api/upload';
+import * as authApi from '../api/auth';
+import type { Channel } from '../api/auth';
 import type { User, Article, Comment } from '../types';
 import ArticleCard from '../components/ArticleCard';
 import { useTranslation } from '../i18n';
@@ -65,6 +76,14 @@ function Profile() {
   const [passwordForm] = Form.useForm();
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+
+  // ---- Post-registration verification (email / phone) ----
+  const [verifyChannel, setVerifyChannel] = useState<Channel | null>(null);
+  const [verifyCode, setVerifyCode] = useState('');
+  const [verifySending, setVerifySending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyRemaining, setVerifyRemaining] = useState(0);
+  const [verifyDevCode, setVerifyDevCode] = useState<string | null>(null);
 
   const initialFetchDone = useRef(false);
 
@@ -189,6 +208,87 @@ function Profile() {
     [authUser, setUser, fetchProfile, t],
   );
 
+  // -------------------------------------------------------------------------
+  // Verification flow helpers
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (verifyRemaining <= 0) return;
+    const id = setInterval(() => setVerifyRemaining((r) => (r <= 1 ? 0 : r - 1)), 1000);
+    return () => clearInterval(id);
+  }, [verifyRemaining]);
+
+  const openVerify = (channel: Channel) => {
+    setVerifyChannel(channel);
+    setVerifyCode('');
+    setVerifyRemaining(0);
+    setVerifyDevCode(null);
+  };
+
+  const closeVerify = () => {
+    setVerifyChannel(null);
+    setVerifyCode('');
+    setVerifyRemaining(0);
+    setVerifyDevCode(null);
+  };
+
+  const sendVerifyCode = useCallback(async () => {
+    if (!verifyChannel) return;
+    setVerifySending(true);
+    try {
+      const res = await authApi.resendVerify(verifyChannel);
+      if (res?.success) {
+        message.success(t('codeSent'));
+        setVerifyDevCode(res.data?.dev_code ?? null);
+        setVerifyRemaining(60);
+      } else {
+        message.error(res?.message || t('sendFail'));
+      }
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : t('sendFail'));
+    } finally {
+      setVerifySending(false);
+    }
+  }, [verifyChannel, t]);
+
+  const handleVerify = useCallback(async () => {
+    if (!verifyChannel) return;
+    if (!verifyCode.trim()) {
+      message.error(t('codeRequired'));
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await authApi.verifyContact(verifyChannel, verifyCode.trim());
+      if (res?.success) {
+        message.success(t('verifySuccess'));
+        closeVerify();
+        // Refresh profile + global auth user so the verified Tag updates live.
+        await fetchProfile();
+        if (authUser) {
+          setUser({
+            ...authUser,
+            email_verified:
+              verifyChannel === 'email' ? true : authUser.email_verified,
+            phone_verified:
+              verifyChannel === 'sms' ? true : authUser.phone_verified,
+          });
+        }
+      } else {
+        message.error(res?.message || t('verifyFailed'));
+      }
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : t('verifyFailed'));
+    } finally {
+      setVerifying(false);
+    }
+  }, [verifyChannel, verifyCode, authUser, setUser, fetchProfile, t]);
+
+  // Show a spinner until the initial profile load finishes. This early return
+  // MUST come AFTER every hook declaration (useState/useCallback/useEffect),
+  // otherwise the loading render skips hooks and React throws
+  // "Rendered more hooks than during the previous render" — which previously
+  // crashed the whole page.
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
@@ -197,12 +297,38 @@ function Profile() {
     );
   }
 
+  const emailUnverified = !profile?.email_verified;
+  const phoneUnverified = !profile?.phone_verified;
+  const anyUnverified = emailUnverified || phoneUnverified;
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <Title level={3} style={{ marginBottom: 24 }}>{t('profileTitle')}</Title>
 
       {/* Profile Info */}
       <Card style={{ marginBottom: 24, borderRadius: 8 }}>
+        {anyUnverified && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t('verifyReminder')}
+            action={
+              <Space>
+                {emailUnverified && profile?.email && (
+                  <Button size="small" type="primary" onClick={() => openVerify('email')}>
+                    {t('verifyNow')}
+                  </Button>
+                )}
+                {phoneUnverified && profile?.phone && (
+                  <Button size="small" type="primary" onClick={() => openVerify('sms')}>
+                    {t('verifyNow')}
+                  </Button>
+                )}
+              </Space>
+            }
+          />
+        )}
         <Space
           vertical={isMobile ? true : false}
           size={24}
@@ -235,6 +361,24 @@ function Profile() {
               <Descriptions.Item label={t('role')}>{profile?.role || t('user')}</Descriptions.Item>
               <Descriptions.Item label={t('joined')}>
                 {formatDate(profile?.created_at)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('verifyEmail')}>
+                {profile?.email ? (
+                  <Tag color={emailUnverified ? 'error' : 'success'}>
+                    {emailUnverified ? t('unverified') : t('verified')}
+                  </Tag>
+                ) : (
+                  <Tag>{t('unboundEmail')}</Tag>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('verifyPhone')}>
+                {profile?.phone ? (
+                  <Tag color={phoneUnverified ? 'error' : 'success'}>
+                    {phoneUnverified ? t('unverified') : t('verified')}
+                  </Tag>
+                ) : (
+                  <Tag>{t('unboundEmail')}</Tag>
+                )}
               </Descriptions.Item>
             </Descriptions>
           </div>
@@ -329,7 +473,7 @@ function Profile() {
       </Card>
 
       {/* My Articles & Comments */}
-      {/* <Card style={{ marginTop: 24, borderRadius: 8 }}>
+      <Card style={{ marginTop: 24, borderRadius: 8 }}>
         <Tabs
           defaultActiveKey="articles"
           items={[
@@ -419,7 +563,53 @@ function Profile() {
             },
           ]}
         />
-      </Card> */}
+      </Card>
+
+      {/* Verification Modal */}
+      <Modal
+        title={t('verifyTitle')}
+        open={verifyChannel !== null}
+        onCancel={closeVerify}
+        maskClosable={!verifying}
+        footer={[
+          <Button key="cancel" onClick={closeVerify} disabled={verifying}>
+            {t('cancel')}
+          </Button>,
+          <Button key="ok" type="primary" loading={verifying} onClick={handleVerify}>
+            {t('confirm')}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Text type="secondary">
+            {verifyChannel === 'email' ? profile?.email : profile?.phone}
+          </Text>
+          <Input
+            prefix={<SafetyOutlined />}
+            placeholder={t('verifyPlaceholder')}
+            value={verifyCode}
+            onChange={(e) => setVerifyCode(e.target.value)}
+            maxLength={10}
+            addonAfter={
+              <Button
+                type="link"
+                size="small"
+                loading={verifySending}
+                disabled={verifyRemaining > 0}
+                onClick={sendVerifyCode}
+                style={{ padding: 0 }}
+              >
+                {verifyRemaining > 0
+                  ? t('resendIn').replace('{n}', String(verifyRemaining))
+                  : t('resendVerify')}
+              </Button>
+            }
+          />
+          {verifyDevCode && (
+            <Text type="warning">{t('devCodeHint', { code: verifyDevCode })}</Text>
+          )}
+        </Space>
+      </Modal>
     </div>
   );
 }

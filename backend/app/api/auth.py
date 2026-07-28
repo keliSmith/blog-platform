@@ -8,7 +8,12 @@ from sqlalchemy import or_, select
 
 from app.config import settings
 from app.database import AsyncSession, get_session
-from app.dependencies import create_access_token, hash_password, verify_password
+from app.dependencies import (
+    CurrentUser,
+    create_access_token,
+    hash_password,
+    verify_password,
+)
 from app.models.user import User
 from app.models.verification_code import VerificationCode
 from app.schemas import ok
@@ -16,7 +21,9 @@ from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    ResendVerifyRequest,
     SendCodeRequest,
+    VerifyCodeRequest,
 )
 from app.utils.notifications import send_verification_code
 
@@ -179,12 +186,23 @@ async def send_code(
     await session.flush()
 
     # Fire-and-forget: sending must not block / break the request.
-    await send_verification_code(channel=channel, target=target, code=code, purpose=purpose)
+    send_error = await send_verification_code(
+        channel=channel, target=target, code=code, purpose=purpose
+    )
 
-    data: dict[str, object] = {"expires_in": settings.VERIFICATION_CODE_TTL_MINUTES * 60}
+    data: dict[str, object] = {
+        "expires_in": settings.VERIFICATION_CODE_TTL_MINUTES * 60,
+        "delivered": send_error is None,
+    }
     if settings.EXPOSE_DEV_CODE:
         # Dev convenience only — disabled in production.
         data["dev_code"] = code
+        # Surface the real gateway error so misconfiguration is visible
+        # immediately instead of looking like a silent success. Applies to
+        # both SMS and email channels (was previously SMS-only).
+        if send_error:
+            data["send_error"] = send_error
+            data["sms_error"] = send_error  # backward-compat alias
     return ok(data, message="验证码已发送")
 
 
@@ -225,10 +243,13 @@ async def register(body: RegisterRequest, session: AsyncSession = Depends(get_se
     )
     if body.email:
         user.email = body.email
-        user.email_verified = True
     else:
         user.phone = body.phone
-        user.phone_verified = True
+    # NOTE: registration NO LONGER auto-marks the contact as verified (PRD §4.8).
+    # The model defaults ``email_verified`` / ``phone_verified`` to False, and
+    # we intentionally do NOT overwrite them here. Users must complete the
+    # post-registration verification flow (verify-email / verify-phone) to flip
+    # the flag, otherwise the "verified" status would be meaningless.
 
     session.add(user)
     await session.flush()
@@ -293,3 +314,142 @@ async def reset_password(
     user.password_hash = hash_password(body.new_password)
     await session.flush()
     return ok(message="密码重置成功，请使用新密码登录")
+
+
+# ---------------------------------------------------------------------------
+# Verification: post-registration email / phone verification
+# ---------------------------------------------------------------------------
+
+
+async def _get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
+    return await session.get(User, user_id)
+
+
+async def _do_verify(
+    session: AsyncSession, user: User, channel: str, purpose: str, code: str
+) -> dict:
+    """Shared verify logic for email and phone.
+
+    Returns the response dict. Raises HTTPException on failure. ``purpose`` is
+    always ``"verify"`` here (distinct from registration / reset codes).
+    """
+    target = user.email if channel == "email" else user.phone
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未绑定邮箱" if channel == "email" else "未绑定手机号",
+        )
+    # Idempotent: already-verified contacts pass through without a fresh code.
+    if channel == "email" and user.email_verified:
+        return ok(message="验证成功")
+    if channel == "sms" and user.phone_verified:
+        return ok(message="验证成功")
+
+    success, err = await _consume_code(session, target, channel, purpose, code)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err)
+
+    if channel == "email":
+        user.email_verified = True
+    else:
+        user.phone_verified = True
+    await session.flush()
+    return ok(message="验证成功")
+
+
+@router.post("/api/auth/verify-email")
+async def verify_email(
+    body: VerifyCodeRequest,
+    user_id: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+):
+    """Verify the logged-in user's email with a code sent to that address.
+
+    The email is derived from the authenticated user (never the client body),
+    so a user cannot verify someone else's address.
+    """
+    user = await _get_user_by_id(session, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    return await _do_verify(session, user, "email", "verify", body.code)
+
+
+@router.post("/api/auth/verify-phone")
+async def verify_phone(
+    body: VerifyCodeRequest,
+    user_id: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+):
+    """Verify the logged-in user's phone with a code sent to that number.
+
+    The phone is derived from the authenticated user (never the client body).
+    """
+    user = await _get_user_by_id(session, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    return await _do_verify(session, user, "sms", "verify", body.code)
+
+
+@router.post("/api/auth/resend-verify")
+async def resend_verify(
+    body: ResendVerifyRequest,
+    user_id: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+):
+    """Send (or resend) a verification code for an already-registered contact.
+
+    Body: ``{"channel": "email" | "sms"}``. The target is derived from the
+    authenticated user. Rejects already-verified contacts and enforces the
+    60-second resend window (returns 429 when too frequent).
+    """
+    user = await _get_user_by_id(session, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    channel = body.channel
+    target = user.email if channel == "email" else user.phone
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未绑定邮箱" if channel == "email" else "未绑定手机号",
+        )
+
+    # Already verified — no point (re)sending a code.
+    if channel == "email" and user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="该联系方式已验证"
+        )
+    if channel == "sms" and user.phone_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="该联系方式已验证"
+        )
+
+    if await _rate_limited(session, target, channel, "verify"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="验证码发送过于频繁，请稍后再试",
+        )
+
+    await _invalidate_previous_codes(session, target, channel, "verify")
+
+    code = _generate_code()
+    expires_at = _now() + timedelta(minutes=settings.VERIFICATION_CODE_TTL_MINUTES)
+    session.add(
+        VerificationCode(
+            target=target,
+            channel=channel,
+            purpose="verify",
+            code=code,
+            expires_at=expires_at,
+        )
+    )
+    await session.flush()
+
+    # Fire-and-forget: sending must not block / break the request.
+    await send_verification_code(channel=channel, target=target, code=code, purpose="verify")
+
+    data: dict[str, object] = {"expires_in": settings.VERIFICATION_CODE_TTL_MINUTES * 60}
+    if settings.EXPOSE_DEV_CODE:
+        # Dev convenience only — disabled in production.
+        data["dev_code"] = code
+    return ok(data, message="验证码已发送")

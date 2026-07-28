@@ -73,6 +73,13 @@ function Register() {
         message.success(t('codeSent'));
         setDevCode(res.data?.dev_code ?? null);
         setRemaining(60);
+        // Dev-only: surface the real gateway error (SMS or email) so a failed
+        // send (bad template / credentials / unverified sender) is visible
+        // instead of looking like a silent success.
+        const sendErr = res.data?.send_error || res.data?.sms_error;
+        if (sendErr) {
+          message.warning(`验证码发送失败: ${sendErr}`);
+        }
       } else {
         message.error(res?.message || t('sendFail'));
       }

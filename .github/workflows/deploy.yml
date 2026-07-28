@@ -35,9 +35,13 @@ jobs:
               - 'frontend/**'
             backend:
               - 'backend/**'
+            deploycfg:
+              - 'deploy/**'
+            workflow:
+              - '.github/workflows/deploy.yml'
 
       - name: Setup Node.js
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -46,14 +50,14 @@ jobs:
 
       # 前端在 GitHub runner 上构建 (资源充足, 不占服务器)
       - name: Install & Build frontend
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
         working-directory: frontend
         run: |
           npm install --no-audit --no-fund
           npm run build
 
       - name: Copy dist to server
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -69,6 +73,8 @@ jobs:
         env:
           DEPLOY_FRONTEND: ${{ steps.changes.outputs.frontend }}
           DEPLOY_BACKEND: ${{ steps.changes.outputs.backend }}
+          DEPLOY_DEPLOYCFG: ${{ steps.changes.outputs.deploycfg }}
+          DEPLOY_WORKFLOW: ${{ steps.changes.outputs.workflow }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
@@ -76,6 +82,12 @@ jobs:
           port: 22
           script: |
             set -e
+            # 部署配置(deploy/nginx, compose)或本 CI 脚本改动时, 前端容器也需重建/reload
+            # 才生效, 否则会出现"改了 nginx/部署脚本但前端仍异常"的情况。
+            if [ "$DEPLOY_DEPLOYCFG" = "true" ] || [ "$DEPLOY_WORKFLOW" = "true" ]; then
+              DEPLOY_FRONTEND=true
+              echo "==> 检测到部署配置/CI 改动, 强制重建 frontend 容器"
+            fi
             cd ${{ env.REMOTE_DIR }}
             if [ -d .git ]; then
               git fetch origin main

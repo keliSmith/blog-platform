@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # UI flow can be tested without reading server logs. Production defaults
     # to False. Use the `console` notification backends to still see codes.
     EXPOSE_DEV_CODE: bool = False
+    # Grace period (days) after registration during which an unverified
+    # account may still comment / favorite / like. After this window,
+    # unverified accounts are blocked from those trust-sensitive actions
+    # until they verify an email or phone number (see dependencies.deny_if_unverified).
+    VERIFICATION_GRACE_DAYS: int = 7
 
     # --- Email notification backend ---
     # "console"  -> log the code to the server console (default, no deps).
@@ -65,13 +70,32 @@ class Settings(BaseSettings):
 
     # --- SMS notification backend ---
     # "console" -> log the code to the server console (default, no deps).
-    # A real provider (Aliyun/Twilio/...) can be wired in notifications.py.
+    # "provider" -> send real SMS via the provider named in SMS_PROVIDER.
+    #   Implemented: "aliyun" (DysmsAPI, 企业签名/模板) and "dypns"
+    #   (号码认证服务·短信认证 SendSmsVerifyCode, 个人免签名/模板). 两者纯 stdlib。
     SMS_BACKEND: str = "console"
     SMS_PROVIDER: str = ""  # e.g. "aliyun", "tencent", "twilio"
-    SMS_ACCESS_KEY: str = ""
-    SMS_SECRET: str = ""
-    SMS_SIGN_NAME: str = ""
+    SMS_ACCESS_KEY: str = ""  # Aliyun AccessKeyId
+    SMS_SECRET: str = ""  # Aliyun AccessKeySecret
+    SMS_SIGN_NAME: str = ""  # 已审核通过的短信签名
+    SMS_REGION_ID: str = "cn-hangzhou"  # Aliyun SMS endpoint region
+    # Template codes. SMS_TEMPLATE_CODE is the shared default; per-purpose
+    # overrides are recommended because Aliyun templates are purpose-specific.
     SMS_TEMPLATE_CODE: str = ""
+    SMS_TEMPLATE_REGISTER: str = ""
+    SMS_TEMPLATE_RESET: str = ""
+    SMS_TEMPLATE_VERIFY: str = ""
+    # Variable name injected into the template (Aliyun TemplateParam is JSON).
+    # Most templates use {"code": "123456"} -> leave as "code".
+    SMS_TEMPLATE_PARAM_KEY: str = "code"
+    # Network timeout (seconds) for the Aliyun SendSms HTTP call.
+    SMS_TIMEOUT: int = 10
+    # By default the SendSms call connects DIRECTLY to dysmsapi.aliyuncs.com
+    # and ignores HTTP(S)_PROXY env vars. This avoids 403s from localhost MITM
+    # proxies (Fiddler/Charles/mitmproxy/VPN tools) that can't forward the
+    # Aliyun endpoint. Set to True only if outbound MUST go through a corporate
+    # proxy.
+    SMS_USE_PROXY: bool = False
 
     model_config = {
         "env_file": str(_BASE_DIR / ".env"),
