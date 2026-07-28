@@ -80,8 +80,10 @@ jobs:
             if [ -d .git ]; then
               git fetch origin main
               git reset --hard origin/main
-              # 排除 frontend/dist (SCP 刚上传的产物) 和 .env.prod (运行必需配置)
-              git clean -fd -e frontend/dist -e .env.prod
+              # 排除 frontend/dist (SCP 刚上传的产物), .env.prod (运行必需配置),
+              # 以及 deploy/nginx/default.conf (deploy.sh 首次运行时从模板生成的未跟踪文件,
+              # 若被 git clean 删除会导致 nginx bind mount 挂载失败, 容器 crash)。
+              git clean -fd -e frontend/dist -e .env.prod -e deploy/nginx/default.conf
             else
               git clone https://github.com/keliSmith/blog-platform.git .
             fi
@@ -92,6 +94,15 @@ jobs:
               set -a
               source .env.prod
               set +a
+            fi
+            # 同步最新 nginx 模板并 reload, 让 deploy/nginx 下的配置改动也能自动生效
+            # (运行中的 frontend 容器挂载的是 deploy.sh 首次生成的 default.conf, 之后改模板不会自动同步)。
+            if [ -n "${DOMAIN:-}" ] && [ -f nginx/default.conf.https ]; then
+              DOMAIN_LIST="$DOMAIN www.$DOMAIN"
+              sed -e "s|{{DOMAIN}}|$DOMAIN|g" -e "s|{{DOMAIN_LIST}}|$DOMAIN_LIST|g" \
+                  nginx/default.conf.https > nginx/default.conf
+              docker compose -f docker-compose.prod.yml exec -T frontend nginx -s reload || true
+              echo "==> nginx config synced & reloaded"
             fi
             if [ "$DEPLOY_FRONTEND" = "true" ]; then
               docker compose -f docker-compose.prod.yml up -d --build frontend

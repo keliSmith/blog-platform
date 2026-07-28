@@ -45,8 +45,17 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # 带 contenthash 的构建产物(JS/CSS/图片): 文件名随内容变化才会变,
+    # 命中即长期有效, 可激进长缓存。
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # SPA 入口与回退到 index.html: 不缓存, 确保每次部署后都拉取最新 HTML
+    # (否则浏览器启发式缓存 index.html 会导致"已部署但看不到变化")。
     location / {
         root /usr/share/nginx/html;
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
     }
 }
