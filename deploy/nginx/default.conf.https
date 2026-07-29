@@ -47,7 +47,10 @@ server {
 
     # 带 contenthash 的构建产物(JS/CSS/图片): 文件名随内容变化才会变,
     # 命中即长期有效, 可激进长缓存。
+    # 必须显式声明 root, 否则会回退到 nginx 编译期默认根 (非 /usr/share/nginx/html),
+    # 导致 /assets/*.js|css 404 -> SPA 白屏。
     location /assets/ {
+        root /usr/share/nginx/html;
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
