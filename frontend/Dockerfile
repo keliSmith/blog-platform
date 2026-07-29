@@ -1,35 +1,16 @@
-# 多阶段构建: 在容器内完成 npm install + vite build, 部署不再依赖服务器预先生成 dist
+# 单阶段 Nginx: 构建已移至 CI (GitHub Actions runner) 完成, 这里只负责托管。
+# dist 由宿主机通过 bind mount 注入 (见 docker-compose.prod.yml 的
+# ./../frontend/dist:/usr/share/nginx/html:ro), 镜像内不再跑 npm ci / vite build。
+#
+# 这样把吃内存/CPU 的前端打包从"小服务器"挪到了 GitHub runner, 服务器只做秒级
+# `docker compose up` 与 `nginx -s reload`, 不再因 vite build 卡死。
 #
 # 用法:
-#   cd deploy && bash deploy.sh
-#   (deploy.sh 内部执行 `docker compose build frontend`, 本 Dockerfile 自动完成
-#    依赖安装与构建, 无需在服务器上手动 npm run build 或上传 frontend/dist)
-#
-# 说明:
-#   - 阶段1 用 node:22-alpine 安装依赖并构建, 产物落在 /app/dist
-#   - 阶段2 用 nginx:1.27-alpine 仅托管构建产物 (与之前 COPY dist ./ 的对外行为一致)
-#   - 使用国内 npm 镜像 (registry.npmmirror.com) 避免官方源在服务器上超时卡死
-#   - 构建上下文内的 node_modules/dist 已被 .dockerignore 排除, 不会污染镜像
+#   cd deploy && docker compose -f docker-compose.prod.yml up -d --build frontend
 
-# ---------- 阶段 1: 构建 ----------
-FROM node:22-alpine AS build
-WORKDIR /app
-
-# 国内 npm 镜像, 避免官方源超时
-RUN npm config set registry https://registry.npmmirror.com
-
-# 先拷依赖清单并利用层缓存 (package.json / package-lock.json 不变则不重装)
-COPY package.json package-lock.json ./
-RUN npm ci
-
-# 再拷源码并构建
-COPY . .
-RUN npm run build
-
-# ---------- 阶段 2: 托管 ----------
 FROM nginx:1.27-alpine
 WORKDIR /usr/share/nginx/html
-COPY --from=build /app/dist .
-# default.conf 由 deploy/nginx 在运行时通过 bind mount 注入 (见 docker-compose.prod.yml)
+# 默认 nginx 根目录即 /usr/share/nginx/html, 与 deploy/nginx/default.conf 中
+# location /assets/ 与 location / 的 root 一致, dist 由宿主机 bind mount 覆盖。
 EXPOSE 80 443
 CMD ["nginx", "-g", "daemon off;"]

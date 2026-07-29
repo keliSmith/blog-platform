@@ -81,6 +81,10 @@ services:
       - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # 预构建的 dist 由 CI (GitHub Actions runner) 构建后 SCP 到服务器,
+      # 这里直接 bind mount 进容器, 服务器不再跑 vite build。
+      # 路径相对本 compose 文件 (deploy/), 即 /opt/blog-platform/frontend/dist
+      - ./../frontend/dist:/usr/share/nginx/html:ro
       - certbot_certs:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
     networks: [app-net]

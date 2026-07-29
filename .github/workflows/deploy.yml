@@ -16,6 +16,7 @@ concurrency:
 
 env:
   REMOTE_DIR: /opt/blog-platform   # 服务器上项目根目录 (deploy/ 的上一级), 按需修改
+  NODE_VERSION: '22'
 
 jobs:
   deploy:
@@ -40,12 +41,70 @@ jobs:
             workflow:
               - '.github/workflows/deploy.yml'
 
-      # 前端采用多阶段 Dockerfile: 镜像内 `npm ci` + `vite build` 自行构建,
-      # 不再需要在 runner 上预构建并 SCP dist (旧单阶段 COPY dist 逻辑已废弃)。
-      # 所有构建都在下方 SSH 步骤的 `docker compose up -d --build frontend` 中完成。
+      # 1) 服务器侧: 同步仓库 (git clone/pull + reset/clean) 并准备好 dist 目录。
+      #    注意: frontend/dist 已在 git clean 中排除, 不会被清掉, 之后由 CI 的 SCP 覆盖。
+      - name: Sync repo on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd ${{ env.REMOTE_DIR }}
+            if [ -d .git ]; then
+              git fetch origin main
+              git reset --hard origin/main
+              # 排除 frontend/dist (CI 刚上传的产物), .env.prod (运行必需配置),
+              # 以及 deploy/nginx/default.conf (首次生成未跟踪文件, 删掉会导致 bind mount 失败)。
+              git clean -fd -e frontend/dist -e .env.prod -e deploy/nginx/default.conf
+            else
+              git clone https://github.com/keliSmith/blog-platform.git .
+            fi
+            # 确保 dist 目录存在, 供下方 SCP 写入 (首次部署时 gitignored 的 dist 不存在)
+            mkdir -p frontend/dist
+            echo "==> repo synced at $(pwd)"
 
-      # 在服务器上: 同步仓库(git pull) -> 按需重建 frontend/backend -> 重启
-      - name: Deploy on server
+      # 2) Runner 侧: 构建前端。仅在改动前端 / 部署配置 / CI 脚本时才跑, 省时间。
+      #    构建在 GitHub runner 上完成 (资源充足), 不再在服务器内跑 vite build。
+      - name: Setup Node
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend (npm ci + vite build)
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
+        working-directory: frontend
+        run: |
+          # runner 位于 GitHub 托管环境, 直连官方 npm registry 最快最稳, 无需国内镜像
+          npm ci
+          npm run build
+
+      # 3) 把预构建的 dist 直接 SCP 到服务器。
+      #    用确定性写法: 源写成 frontend/dist/. (末尾的点) 把"内容"落入目标 dist 目录,
+      #    避免 scp 工具对"目录 vs 内容"的歧义; 目标目录在服务器侧已 mkdir -p 准备好。
+      - name: Upload frontend dist to server
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
+          REMOTE_DIR: ${{ env.REMOTE_DIR }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" "mkdir -p $REMOTE_DIR/frontend/dist"
+          scp -o StrictHostKeyChecking=no -r frontend/dist/. "$SSH_USER@$SSH_HOST:$REMOTE_DIR/frontend/dist/"
+          echo "==> dist uploaded to $REMOTE_DIR/frontend/dist"
+
+      # 4) 服务器侧: 重建/重启服务。前端仅做秒级 nginx up + reload (dist 已 bind mount)。
+      - name: Deploy services on server
         uses: appleboy/ssh-action@v1
         env:
           DEPLOY_FRONTEND: ${{ steps.changes.outputs.frontend }}
@@ -65,18 +124,7 @@ jobs:
               DEPLOY_FRONTEND=true
               echo "==> 检测到部署配置/CI 改动, 强制重建 frontend 容器"
             fi
-            cd ${{ env.REMOTE_DIR }}
-            if [ -d .git ]; then
-              git fetch origin main
-              git reset --hard origin/main
-              # 排除 frontend/dist (SCP 刚上传的产物), .env.prod (运行必需配置),
-              # 以及 deploy/nginx/default.conf (deploy.sh 首次运行时从模板生成的未跟踪文件,
-              # 若被 git clean 删除会导致 nginx bind mount 挂载失败, 容器 crash)。
-              git clean -fd -e frontend/dist -e .env.prod -e deploy/nginx/default.conf
-            else
-              git clone https://github.com/keliSmith/blog-platform.git .
-            fi
-            cd deploy
+            cd ${{ env.REMOTE_DIR }}/deploy
             # 载入 .env.prod, 让 docker compose 正确插值 ${MYSQL_PASSWORD} 等变量,
             # 否则 DATABASE_URL 中的密码会为空, 导致迁移/后端连不上数据库。
             if [ -f .env.prod ]; then
@@ -94,7 +142,12 @@ jobs:
               echo "==> nginx config synced & reloaded"
             fi
             if [ "$DEPLOY_FRONTEND" = "true" ]; then
+              # 前端镜像已是纯 nginx 单阶段 (见 frontend/Dockerfile), --build 只重建轻量镜像,
+              # 真正的静态文件来自刚刚 SCP 的 frontend/dist (bind mount), 服务器端不再跑 vite build。
               docker compose -f docker-compose.prod.yml up -d --build frontend
+              docker compose -f docker-compose.prod.yml exec -T frontend nginx -s reload
+              echo "==> Frontend container status:"
+              docker compose -f docker-compose.prod.yml ps frontend
             fi
             if [ "$DEPLOY_BACKEND" = "true" ]; then
               docker compose -f docker-compose.prod.yml build backend
@@ -103,10 +156,6 @@ jobs:
             fi
             # Verify: wait for new containers then health-check
             sleep 5
-            if [ "$DEPLOY_FRONTEND" = "true" ]; then
-              echo "==> Frontend container status:"
-              docker compose -f docker-compose.prod.yml ps frontend
-            fi
             if [ "$DEPLOY_BACKEND" = "true" ]; then
               echo "==> Backend health check:"
               docker compose -f docker-compose.prod.yml exec -T backend \
