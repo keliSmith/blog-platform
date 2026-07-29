@@ -1,0 +1,8 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Blog 品牌标识 标准版">
+  <title>Blog Logo — Standard</title>
+  <desc>圆角方印（墨蓝底）+ 白色小写 b + 朱红识别点</desc>
+  <rect x="0" y="0" width="200" height="200" rx="44" fill="#15173D"/>
+  <rect x="64" y="48" width="24" height="104" rx="12" fill="#FFFFFF"/>
+  <circle cx="126" cy="100" r="38" fill="#FFFFFF"/>
+  <circle cx="126" cy="100" r="16" fill="#E8473F"/>
+</svg>

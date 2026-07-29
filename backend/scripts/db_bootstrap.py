@@ -19,6 +19,12 @@
 import asyncio
 import subprocess
 import sys
+from pathlib import Path
+
+# Make the backend package root importable when run as a standalone script
+# (python scripts/db_bootstrap.py ...), where sys.path[0] would otherwise be
+# the scripts/ directory instead of the project root.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import inspect, text
 
