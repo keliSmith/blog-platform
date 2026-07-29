@@ -94,6 +94,13 @@ done
 echo "==> 构建后端"
 docker compose -f "$COMPOSE_FILE" build backend
 
+echo "==> 数据库预检 (处理遗留 create_all / init.sql 表结构)"
+# 旧版后端在启动时直接 Base.metadata.create_all 建表, 或早期 init.sql 手动建表,
+# 都不会写入 alembic_version。若业务表已存在但版本表为空, 直接 `alembic upgrade
+# head` 会重建初始表结构并报 "Table 'X' already exists"。db_bootstrap.py 会在此类
+# 情况下自动 stamp 基线 f6a07e5dea48, 使后续迁移只补跑增量 (幂等)。
+docker compose -f "$COMPOSE_FILE" run --rm backend python scripts/db_bootstrap.py
+
 echo "==> 运行数据库迁移 (Alembic)"
 # 容器内的 app.config 会读取 APP_ENV / DATABASE_URL 等环境变量 (由 compose 注入),
 # 这里已 source .env.prod, 故 ${MYSQL_PASSWORD} 等插值正确, 迁移连的是真实 MySQL。
