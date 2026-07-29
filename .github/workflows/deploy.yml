@@ -40,32 +40,9 @@ jobs:
             workflow:
               - '.github/workflows/deploy.yml'
 
-      - name: Setup Node.js
-        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      # 前端在 GitHub runner 上构建 (资源充足, 不占服务器)
-      - name: Install & Build frontend
-        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
-        working-directory: frontend
-        run: |
-          npm install --no-audit --no-fund
-          npm run build
-
-      - name: Copy dist to server
-        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.deploycfg == 'true' || steps.changes.outputs.workflow == 'true'
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          source: "frontend/dist"
-          target: "${{ env.REMOTE_DIR }}"
+      # 前端采用多阶段 Dockerfile: 镜像内 `npm ci` + `vite build` 自行构建,
+      # 不再需要在 runner 上预构建并 SCP dist (旧单阶段 COPY dist 逻辑已废弃)。
+      # 所有构建都在下方 SSH 步骤的 `docker compose up -d --build frontend` 中完成。
 
       # 在服务器上: 同步仓库(git pull) -> 按需重建 frontend/backend -> 重启
       - name: Deploy on server

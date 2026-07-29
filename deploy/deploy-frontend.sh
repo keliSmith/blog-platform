@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# 前端一键部署脚本 (预构建产物模式)
-# 流程: 本地 npm 构建 -> rsync dist 到服务器 -> 服务器重建并重启前端容器
+# 前端一键部署脚本 (多阶段构建模式)
+# 流程: 服务器拉取最新源码 -> 重建前端镜像(镜像内自动 npm ci + vite build) -> 重启容器
 # 用法:  bash deploy/deploy-frontend.sh
 #
 # 首次使用前请修改下面的 SERVER / REMOTE_DIR (或通过环境变量传入):
@@ -17,19 +17,11 @@ SERVER="${DEPLOY_SERVER:-user@your-server-ip}"        # 服务器 SSH 地址, �
 REMOTE_DIR="${DEPLOY_REMOTE_DIR:-/opt/blog-platform}"  # 服务器上项目根目录 (deploy/ 的上一级)
 # =========================================
 
-FRONTEND_DIR="$SCRIPT_DIR/../frontend"
+echo "==> 1. 服务器拉取最新前端源码"
+ssh "$SERVER" "cd $REMOTE_DIR && git pull"
 
-echo "==> 1. 本地构建前端"
-cd "$FRONTEND_DIR"
-npm install
-npm run build
-cd "$SCRIPT_DIR"
-
-echo "==> 2. 同步 dist 到服务器 $SERVER:$REMOTE_DIR/frontend/dist"
-rsync -az --delete "$FRONTEND_DIR/dist/" "$SERVER:$REMOTE_DIR/frontend/dist/"
-
-echo "==> 3. 在服务器重建并重启前端容器"
-# 镜像很小 (只 COPY dist 给 nginx), build 通常 1~2 秒
+echo "==> 2. 重建前端镜像 (镜像内自动 npm ci + vite build) 并重启容器"
+# 多阶段 Dockerfile 已在容器内完成依赖安装与构建, 无需本地预构建 / 上传 dist
 ssh "$SERVER" "cd $REMOTE_DIR/deploy && \
   docker compose -f docker-compose.prod.yml build frontend && \
   docker compose -f docker-compose.prod.yml up -d frontend"
