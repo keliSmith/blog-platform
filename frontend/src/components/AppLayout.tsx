@@ -61,10 +61,15 @@ function AppLayout() {
 
   const navItems: MenuProps['items'] = useMemo(
     () => [
-      { key: '/', icon: <HomeOutlined />, label: t('home') },
-      { key: '/my-articles', icon: <FileTextOutlined />, label: t('myArticles') },
+      { key: '/', icon: <HomeOutlined />, label: t('home'), onClick: () => navigate('/') },
+      {
+        key: '/my-articles',
+        icon: <FileTextOutlined />,
+        label: t('myArticles'),
+        onClick: () => navigate('/my-articles'),
+      },
     ],
-    [t],
+    [t, navigate],
   );
 
   const selectedKey = useMemo(() => {
@@ -143,13 +148,16 @@ function AppLayout() {
         }}
       >
         <Space>
-          <Text
-            strong
-            style={{ fontSize: 18, cursor: 'pointer', whiteSpace: 'nowrap' }}
-            onClick={() => navigate('/', { state: { refresh: Date.now() } })}
-          >
-            Blog Platform
-          </Text>
+          {isMobile && (
+            <Button
+              type="text"
+              icon={<HomeOutlined style={{ fontSize: 20 }} />}
+              aria-label="Home"
+              style={{ display: 'flex', alignItems: 'center' }}
+              onClick={() => navigate('/', { state: { refresh: Date.now() } })}
+            />
+          )}
+          
           {!isMobile &&
             navItems.map((item) => {
               const it = item as unknown as { key: string; icon?: ReactNode; label?: ReactNode };

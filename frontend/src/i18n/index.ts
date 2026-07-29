@@ -7,7 +7,7 @@ type Dict = Record<string, string>;
 
 const zh: Dict = {
   // ---- 布局 / 顶栏 ----
-  blogTitle: 'Blog Platform',
+  blogTitle: '墨羽',
   home: '首页',
   write: '写文章',
   myArticles: '我的文章',
@@ -55,7 +55,7 @@ const zh: Dict = {
   searchKeywordRequired: '请输入关键字、标题等以进行搜索',
 
   // ---- 首页 ----
-  heroTitle: '欢迎使用博客平台',
+  heroTitle: '欢迎使用墨羽',
   heroSubtitle: '发现优质文章，分享你的想法，与作者交流。',
   searchPlaceholder: '搜索标题、内容或作者…',
   search: '搜索',
@@ -211,18 +211,13 @@ const zh: Dict = {
   backToLogin: '返回登录',
 
   // ---- 账号验证（邮箱 / 手机）----
-  verified: '已验证',
-  unverified: '未验证',
   verifyReminder: '请先验证你的邮箱或手机号，以解锁评论、收藏和点赞等功能',
-  verifyEmail: '验证邮箱',
-  verifyPhone: '验证手机',
   verifyTitle: '验证联系方式',
   verifyPlaceholder: '请输入验证码',
   verifySuccess: '验证成功',
   verifyFailed: '验证失败',
   resendVerify: '重新发送验证码',
   alreadyVerified: '该联系方式已验证',
-  unboundEmail: '未绑定邮箱',
   verifyNow: '去验证',
   emailNotVerified: '邮箱未验证',
   phoneNotVerified: '手机未验证',
@@ -430,7 +425,7 @@ const zh: Dict = {
 
 const en: Dict = {
   // ---- layout / header ----
-  blogTitle: 'Blog Platform',
+  blogTitle: 'inkmoth',
   home: 'Home',
   write: 'Write',
   myArticles: 'My Articles',
@@ -478,7 +473,7 @@ const en: Dict = {
   searchKeywordRequired: 'Please enter keywords or a title to search',
 
   // ---- home ----
-  heroTitle: 'Welcome to Blog Platform',
+  heroTitle: 'Welcome to inkmoth',
   heroSubtitle: 'Discover insightful articles, share your thoughts, and connect with writers.',
   searchPlaceholder: 'Search by title, content or author…',
   search: 'Search',
@@ -590,14 +585,14 @@ const en: Dict = {
 
   // ---- login / register ----
   loginTitle: 'Login',
-  welcomeBack: 'Welcome back to Blog Platform',
+  welcomeBack: 'Welcome back to inkmoth',
   pleaseEnterPassword: 'Please enter your password',
   loginSuccess: 'Login successful',
   loginFail: 'Login failed',
   noAccount: "Don't have an account?",
   registerNow: 'Register now',
   registerTitle: 'Register',
-  createAccount: 'Create your Blog Platform account',
+  createAccount: 'Create your inkmoth account',
   confirmPassword: 'Confirm Password',
   pleaseConfirmPassword: 'Please confirm your password',
   pwdMismatchRegister: 'Passwords do not match',
@@ -634,18 +629,13 @@ const en: Dict = {
   backToLogin: 'Back to login',
 
   // ---- account verification (email / phone) ----
-  verified: 'Verified',
-  unverified: 'Unverified',
   verifyReminder: 'Please verify your email or phone to unlock commenting, favoriting and liking.',
-  verifyEmail: 'Verify email',
-  verifyPhone: 'Verify phone',
   verifyTitle: 'Verify contact',
   verifyPlaceholder: 'Enter the verification code',
   verifySuccess: 'Verified successfully',
   verifyFailed: 'Verification failed',
   resendVerify: 'Resend code',
   alreadyVerified: 'This contact is already verified',
-  unboundEmail: 'No email bound',
   verifyNow: 'Verify now',
   emailNotVerified: 'Email not verified',
   phoneNotVerified: 'Phone not verified',
