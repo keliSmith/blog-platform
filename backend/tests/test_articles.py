@@ -102,12 +102,21 @@ async def test_unpublish_preserves_tags(client, auth_headers):
 
 
 @pytest.mark.anyio
-async def test_search_articles(client):
-    """Search endpoint works."""
+async def test_search_articles(client, sample_article):
+    """Search endpoint returns a paginated envelope ({items, pagination})."""
     resp = await client.get("/api/search/articles?keyword=test")
     data = resp.json()
     assert resp.status_code == 200
     assert data["success"] is True
+    # The endpoint must return the same paginated envelope as the list endpoint
+    # (a dict with `items` + `pagination`), NOT a raw array. The frontend reads
+    # data["items"] / data["pagination"]["total"].
+    assert isinstance(data["data"], dict)
+    assert isinstance(data["data"]["items"], list)
+    assert data["data"]["items"]
+    assert data["data"]["items"][0]["id"] == sample_article["id"]
+    assert "pagination" in data["data"]
+    assert data["data"]["pagination"]["total"] == len(data["data"]["items"])
 
 
 @pytest.mark.anyio
